@@ -38,6 +38,7 @@ if (host === "localhost") {
 }
 
 export default defineConfig({
+    base: process.env.VITE_BASE_PATH || "/",
   server: {
     allowedHosts: [host],
     cors: {
