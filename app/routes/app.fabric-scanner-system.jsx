@@ -24,7 +24,7 @@ export default function App() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
-        <Link to="/app.fabric-scanner-system/home" rel="home">Dashboard</Link>
+        <Link to="/app/fabric-scanner-system/home" rel="home">Dashboard</Link>
         <Link to="/app/fabric-scanner-system/fabric">Swatch Item Inventory</Link>
         <Link to="/app/fabric-scanner-system/logs">Scan Logs</Link>
         <Link to="/app/fabric-scanner-system/settings">Staff & Settings</Link>
