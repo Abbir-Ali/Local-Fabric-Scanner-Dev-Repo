@@ -31,6 +31,6 @@ scopes = "write_products, read_products, read_orders, read_merchant_managed_fulf
 redirect_urls = [ "https://example.com/api/auth" ]
 
 [app_proxy]
-url = "/api/proxy"
+url = "https://pontiac-ccd-telephone-athens.trycloudflare.com/app/fabric-scanner-system/api/proxy"
 subpath = "fabric-scanner"
 prefix = "apps"
