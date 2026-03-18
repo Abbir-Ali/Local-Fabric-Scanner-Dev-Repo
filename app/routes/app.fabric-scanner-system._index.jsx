@@ -1,60 +1,126 @@
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { authenticate } from "../shopify.server";
+import { getAppSettings } from "../models/settings.server";
+import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useState } from "react";
+import { Page, Layout, Button, Text, Box } from "@shopify/polaris";
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
-  return null;
+  const { session } = await authenticate.admin(request);
+  const settings = await getAppSettings(session.shop);
+  return { settings };
 };
 
 export default function Index() {
+  const { settings } = useLoaderData();
+  const navigate = useNavigate();
+  const [showGif, setShowGif] = useState(true);
+
   return (
-    <s-page heading="Shopify app template">
-      <s-section heading="Welcome To B2B Orders Import app">
-        <s-paragraph>
-          This shopify embedded app helps you to create B2B orders by uploading
-          the CSV sheet.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Features">
-        <s-paragraph>
-          <s-unordered-list>
-            <s-list-item>
-              Customer can create orders by uploading the CSV sheet from
-              storefront
-            </s-list-item>
-            <s-list-item>
-              Staff Member can create orders by uploading the CSV sheet by
-              navigating to <s-link href="/app/home">Import Orders</s-link> link
-            </s-list-item>
-            <s-list-item>
-              In the <s-link href="/app/history">History</s-link> page, history
-              of all B2B orders created by Customer or Staff member can be seen.
-            </s-list-item>
-          </s-unordered-list>
-        </s-paragraph>
-      </s-section>
+    <Page title="Fabric Scanner">
+      <Box
+        padding="4"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1.5rem",
+        }}
+      >
+        <Box>
+          <Text variant="headingXl" as="h1">
+            Fabric Scanner
+          </Text>
+          <Text variant="bodyLg" as="p" tone="subdued">
+            Scan fabric orders effortlessly with your phone&apos;s camera — no external scanner needed.
+          </Text>
+        </Box>
 
-      <s-section slot="aside" heading="Getting Started">
-        <s-paragraph>
-          You can Navigate to <s-link href="/app/home">Import Orders</s-link>{" "}
-          page to create B2B Orders.
-        </s-paragraph>
-      </s-section>
+        <Box
+          style={{
+            width: "96px",
+            height: "96px",
+            borderRadius: "999px",
+            overflow: "hidden",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.18)",
+          }}
+        >
+          <img
+            src="/fabric-logo.png"
+            alt="Fabric Scanner logo"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        </Box>
+      </Box>
 
-      <s-section slot="aside" heading="Additional Information">
-        <s-unordered-list>
-          <s-list-item>
-            <s-link
-              href="https://drive.google.com/uc?export=download&id=1FPB2P_Qyif6KvOg5JdPQye0JstpKNRho"
-              target="_blank"
+      <Layout>
+        <Layout.Section>
+          <Box textAlign="center" padding="4">
+            <div
+              style={{
+                maxWidth: "480px",
+                margin: "0 auto 2rem",
+                borderRadius: "18px",
+                overflow: "hidden",
+                boxShadow: "0 16px 40px rgba(0, 0, 0, 0.18)",
+                background: "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(241,241,241,0.85))",
+              }}
             >
-              Download
-            </s-link>{" "}
-            the Sample CSV sheet
-          </s-list-item>
-        </s-unordered-list>
-      </s-section>
-    </s-page>
+              {showGif ? (
+                <img
+                  src="/scanner.gif"
+                  alt="Scanning animation"
+                  style={{ display: "block", width: "100%", height: "auto" }}
+                  onError={() => setShowGif(false)}
+                />
+              ) : (
+                <div
+                  style={{
+                    padding: "3rem 1.5rem",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100px",
+                      background: "linear-gradient(to right, #000 0%, #000 20%, #fff 20%, #fff 40%, #000 40%, #000 60%, #fff 60%, #fff 80%, #000 80%, #000 100%)",
+                      borderRadius: "12px",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "4px",
+                        background: "rgba(255, 0, 0, 0.8)",
+                        animation: "scan 2s infinite",
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button primary size="large" onClick={() => navigate("/app/home")}> 
+              Get Started
+            </Button>
+          </Box>
+        </Layout.Section>
+      </Layout>
+      <style>{`
+        @keyframes scan {
+          0% { top: 0; }
+          50% { top: 50%; }
+          100% { top: 100%; }
+        }
+      `}</style>
+    </Page>
   );
 }
 
