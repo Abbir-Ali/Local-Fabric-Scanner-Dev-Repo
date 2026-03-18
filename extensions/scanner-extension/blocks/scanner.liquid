@@ -1150,36 +1150,105 @@
         window.printShippingLabel = async (id, name, customer, address, isBulk = false) => {
             setLoader(true);
             const logo = currentUser?.brandLogo || '';
-            var win = window.open('', '_blank', 'width=400,height=200'); // Smaller window for thermal label
+            var win = window.open('', '_blank', 'width=300,height=150'); // Thermal label size
             var s = '<script', se = '</' + 'script>';
 
             var html = `<html><head><title>Label - ${name}</title>
                 <style>
-                    body { font-family: sans-serif; margin: 0; padding: 5px; overflow: hidden; }
-                    .label-container { display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: 100%; }
-                    .logo-box { width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-                    .logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-                    .address-box { flex: 1; font-size: 10px; line-height: 1.2; overflow: hidden; }
-                    .customer-name { font-weight: bold; font-size: 11px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        width: 2.625in; 
+                        height: 1in; 
+                        overflow: hidden;
+                        background: white;
+                    }
                     @media print {
-                        @page { size: 2.625in 1in; margin: 0; }
-                        body { padding: 5px; }
+                        @page { 
+                            size: 2.625in 1in; 
+                            margin: 0; 
+                            padding: 0;
+                        }
+                        body {
+                            width: 2.625in;
+                            height: 1in;
+                            padding: 0.05in;
+                            margin: 0;
+                        }
+                    }
+                    .label-container { 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: space-between; 
+                        gap: 0.08in; 
+                        height: 0.9in;
+                        width: 2.525in;
+                        padding: 0.05in;
+                    }
+                    .logo-box { 
+                        width: 0.45in; 
+                        height: 0.45in; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        flex-shrink: 0;
+                        background: white;
+                    }
+                    .logo-box img { 
+                        max-width: 0.4in; 
+                        max-height: 0.4in; 
+                        object-fit: contain; 
+                    }
+                    .address-box { 
+                        flex: 1; 
+                        min-width: 0;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        gap: 0.02in;
+                    }
+                    .customer-name { 
+                        font-weight: bold; 
+                        font-size: 9pt; 
+                        line-height: 1.1;
+                        white-space: nowrap; 
+                        overflow: hidden; 
+                        text-overflow: ellipsis;
+                    }
+                    .address-line { 
+                        font-size: 7pt; 
+                        line-height: 1.1;
+                        word-wrap: break-word;
+                        overflow: hidden;
+                        max-height: 0.3in;
+                        color: #000;
                     }
                 </style>
             </head><body>
                 <div class="label-container">
                     <div class="logo-box">
-                        ${logo ? `<img src="${logo}">` : '<div style="border: 1px solid #ddd; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #999;">LOGO</div>'}
+                        ${logo ? `<img src="${logo}" alt="Logo">` : '<div style="border: 1px solid #ccc; width: 0.35in; height: 0.35in; font-size: 6pt; display: flex; align-items: center; justify-content: center; color: #999;">LOGO</div>'}
                     </div>
                     <div class="address-box">
-                        <div class="customer-name">${customer || 'Customer'}</div>
-                        <div style="word-wrap: break-word;">${address || 'Address Not Available'}</div>
+                        <div class="customer-name">${(customer || 'Customer').substring(0, 30)}</div>
+                        <div class="address-line">${(address || 'Address N/A').substring(0, 60)}</div>
                     </div>
                 </div>
-                ${s}>window.onload = function() { setTimeout(function() { window.print(); window.close(); }, 500); };${se}
+                ${s}>
+                    window.onload = function() { 
+                        document.body.style.margin = '0';
+                        document.body.style.padding = '0';
+                        setTimeout(function() { 
+                            window.print(); 
+                            setTimeout(function() { window.close(); }, 300);
+                        }, 300); 
+                    };
+                ${se}
             </body></html>`;
 
-            win.document.open(); win.document.write(html); win.document.close();
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
 
             setTimeout(() => {
                 setLoader(false);
@@ -1190,6 +1259,7 @@
                 }
             }, 1000);
         }
+
 
         const loadHistory = async (dir = 'next', isPagination = false) => {
             console.log(`[HISTORY FETCH]Direction: ${dir}, isPagination: ${isPagination}, Current page: ${histPage} `);
