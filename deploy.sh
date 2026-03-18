@@ -51,6 +51,9 @@ command=/home/ubuntu/.nvm/versions/node/v22.21.1/bin/npm run docker-start
 directory=/srv/tov-fabric-scanner-system
 autostart=true
 autorestart=false
+startsecs=5
+stopasgroup=true
+killasgroup=true
 user=ubuntu
 environment=NODE_ENV=production,PORT=$PORT,PATH="/home/ubuntu/.nvm/versions/node/v22.21.1/bin:/usr/local/bin:/usr/bin:/bin"
 stdout_logfile=/var/log/tov-fabric-scanner-system.log
