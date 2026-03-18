@@ -17,7 +17,7 @@ export default function Index() {
   const [showGif, setShowGif] = useState(true);
 
   return (
-    <Page title="Fabric Scanner">
+    <Page title=" ">
       <Box
         padding="4"
         style={{
