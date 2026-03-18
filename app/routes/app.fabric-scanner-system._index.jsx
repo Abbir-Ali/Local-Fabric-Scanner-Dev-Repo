@@ -22,21 +22,11 @@ export default function Index() {
         padding="4"
         style={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1.5rem",
         }}
       >
-        <Box>
-          <Text variant="headingXl" as="h1">
-            Fabric Scanner
-          </Text>
-          <Text variant="bodyLg" as="p" tone="subdued">
-            Scan fabric orders effortlessly with your phone&apos;s camera — no external scanner needed.
-          </Text>
-        </Box>
-
         <Box
           style={{
             width: "96px",
@@ -51,6 +41,15 @@ export default function Index() {
             alt="Fabric Scanner logo"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
+        </Box>
+
+        <Box>
+          <Text variant="headingXl" as="h1">
+            Fabric Scanner
+          </Text>
+          <Text variant="bodyLg" as="p" tone="subdued">
+            Scan fabric orders effortlessly with your phone&apos;s camera — no external scanner needed.
+          </Text>
         </Box>
       </Box>
 
