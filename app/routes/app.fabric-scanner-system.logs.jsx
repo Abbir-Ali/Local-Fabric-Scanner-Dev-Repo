@@ -1,7 +1,7 @@
 import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 import { authenticate } from "../shopify.server";
 import { getScanLogs } from "../models/logs.server";
-import { Page, Layout, Card, IndexTable, Badge, Text, TextField, Pagination, BlockStack, InlineStack, Button } from "@shopify/polaris";
+import { Page, Layout, Card, IndexTable, Badge, Text, TextField, Pagination, BlockStack, InlineStack, Button, Link } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 
 export const loader = async ({ request }) => {
@@ -11,11 +11,11 @@ export const loader = async ({ request }) => {
   const query = url.searchParams.get("query") || "";
   
   const { logs, pagination } = await getScanLogs(session.shop, { page, query });
-  return { logs, pagination, query };
+  return { logs, pagination, query, shopDomain: session.shop.replace('.myshopify.com', '') };
 };
 
 export default function Logs() {
-  const { logs, pagination, query: initialQuery } = useLoaderData();
+  const { logs, pagination, query: initialQuery, shopDomain } = useLoaderData();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState(initialQuery);
@@ -42,27 +42,39 @@ export default function Logs() {
   };
 
   const rowMarkup = logs.map(
-    ({ id, orderId, status, scannedBy, staffEmail, timestamp, details }, index) => (
-      <IndexTable.Row id={id} key={id} position={index}>
-        <IndexTable.Cell>
-          <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{(pagination.page - 1) * 10 + index + 1}</Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <Text variant="bodyMd" fontWeight="bold" as="span">{new Date(timestamp).toLocaleString()}</Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>{orderId || '-'}</IndexTable.Cell>
-        <IndexTable.Cell>
-          <Badge tone={status === 'FULFILLED' ? 'success' : 'info'}>{status}</Badge>
-        </IndexTable.Cell>
-        <IndexTable.Cell>
-          <BlockStack gap="0">
-            <Text variant="bodyMd" fontWeight="bold">{scannedBy || 'System'}</Text>
-            {staffEmail && <Text variant="bodySm" tone="subdued">{staffEmail}</Text>}
-          </BlockStack>
-        </IndexTable.Cell>
-        <IndexTable.Cell>{details}</IndexTable.Cell>
-      </IndexTable.Row>
-    ),
+    ({ id, orderId, status, scannedBy, staffEmail, timestamp, details }, index) => {
+      const orderLink = orderId ? (
+        <Link 
+          url={`https://admin.shopify.com/store/${shopDomain}/orders/${orderId.split('/').pop()}`} 
+          target="_blank"
+          monochrome
+        >
+          {orderId}
+        </Link>
+      ) : '-';
+      
+      return (
+        <IndexTable.Row id={id} key={id} position={index}>
+          <IndexTable.Cell>
+            <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{(pagination.page - 1) * 10 + index + 1}</Text>
+          </IndexTable.Cell>
+          <IndexTable.Cell>
+            <Text variant="bodyMd" fontWeight="bold" as="span">{new Date(timestamp).toLocaleString()}</Text>
+          </IndexTable.Cell>
+          <IndexTable.Cell>{orderLink}</IndexTable.Cell>
+          <IndexTable.Cell>
+            <Badge tone={status === 'FULFILLED' ? 'success' : 'info'}>{status}</Badge>
+          </IndexTable.Cell>
+          <IndexTable.Cell>
+            <BlockStack gap="0">
+              <Text variant="bodyMd" fontWeight="bold">{scannedBy || 'System'}</Text>
+              {staffEmail && <Text variant="bodySm" tone="subdued">{staffEmail}</Text>}
+            </BlockStack>
+          </IndexTable.Cell>
+          <IndexTable.Cell>{details}</IndexTable.Cell>
+        </IndexTable.Row>
+      );
+    },
   );
 
   return (

@@ -91,7 +91,7 @@ export const loader = async ({ request }) => {
           };
         }));
 
-        return json({ data: { ...result, edges: enhancedEdges } });
+        return json({ data: { ...result, edges: enhancedEdges, shopDomain: shop.replace('.myshopify.com', '') } });
       }
 
       case "fulfilled": {
@@ -110,7 +110,7 @@ export const loader = async ({ request }) => {
           };
         }));
 
-        return json({ data: { ...result, edges: enhancedEdges } });
+        return json({ data: { ...result, edges: enhancedEdges, shopDomain: shop.replace('.myshopify.com', '') } });
       }
 
       case "partial": {
@@ -135,7 +135,7 @@ export const loader = async ({ request }) => {
           };
         }));
 
-        return json({ data: { ...result, edges: enhancedEdges } });
+        return json({ data: { ...result, edges: enhancedEdges, shopDomain: shop.replace('.myshopify.com', '') } });
       }
 
       case "settings": {

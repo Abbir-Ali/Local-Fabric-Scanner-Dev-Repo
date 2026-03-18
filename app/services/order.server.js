@@ -24,7 +24,6 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
                       title
                       quantity
                       sku
-                      fulfillmentStatus
                       unfulfilledQuantity
                       originalUnitPriceSet { shopMoney { amount } }
                       variant {
@@ -246,7 +245,6 @@ export async function getPartiallyFulfilledOrders(admin, cursor = null, directio
                       title
                       quantity
                       sku
-                      fulfillmentStatus
                       unfulfilledQuantity
                       variant {
                         barcode

@@ -296,6 +296,35 @@
         background: #3e4f4d;
     }
 
+    .fb-view-order-btn {
+        background: var(--p-primary);
+        color: #fff;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 12px;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+        text-decoration: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .fb-view-order-btn:hover {
+        background: #b59285;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        transform: translateY(-1px);
+    }
+
+    .fb-view-order-btn:active {
+        transform: translateY(0);
+    }
+
     .fb-input {
         width: 100%;
         padding: 12px 15px;
@@ -695,7 +724,7 @@
         const PROXY_URL = '/apps/fabric-scanner/get';
 
         let verifiedItems = new Set(), printedLabels = new Set(), inventoryData = [], ordersData = [], historyData = [];
-        let html5QrCode = null, currentUser = null, isScanning = false;
+        let html5QrCode = null, currentUser = null, isScanning = false, shopDomain = null;
 
         let invPage = 1, invHasPrev = false, invHasNext = false, invStart = null, invEnd = null;
         let invSort = 'CREATED_AT', invReverse = true;
@@ -907,15 +936,18 @@
                             const hIdx = (histPage - 1) * 10 + idx + 1;
                             const fulfiller = e.log ? (e.log.scannedBy || e.log.staffEmail) : 'Unknown';
                             return `<div class="fb-order-card" style="padding:15px; border-radius:12px; border:1px solid var(--p-border);">
-                                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                                    <div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                                    <div style="flex:1;">
                                         <b style="font-size:14px;">${hIdx}. ORDER ${e.node.name}</b><br>
                                         <div style="margin-top:4px;">
                                             <span style="color:var(--p-success); font-weight:700; font-size:11px; letter-spacing:0.5px;">FULFILLED</span><br>
                                             <small style="color:var(--p-text-subdued)">Fulfilled by: <b>${fulfiller}</b></small>
                                         </div>
                                     </div>
-                                    <div style="text-align:right;"><small style="color:var(--p-text-subdued); font-size:11px;">${new Date(e.node.updatedAt).toLocaleDateString()}</small></div>
+                                    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                                        ${shopDomain ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${e.node.id.split('/').pop()}', '_blank')">📋 View</button>` : ''}
+                                        <small style="color:var(--p-text-subdued); font-size:11px; white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleDateString()}</small>
+                                    </div>
                                 </div>
                             </div>`;
                         }).join('');
@@ -1011,7 +1043,8 @@
                 const r = await fetch(`${PROXY_URL}?type=orders&direction=${dir}${cur ? `&cursor=${cur}` : ''}&_t=${Date.now()}`);
                 const j = await r.json();
                 ordersData = j.data.edges;
-                console.log(`[ORDERS FETCH] Received ${ordersData.length} items`);
+                shopDomain = j.data.shopDomain;
+                console.log(`[ORDERS FETCH] Received ${ordersData.length} items, shopDomain: ${shopDomain}`);
                 const pi = j.data.pageInfo;
                 if (isPagination && cur) {
                     if (dir === 'next') ordPage++;
@@ -1092,9 +1125,12 @@
 
                 return `<div class="fb-order-card" ${isPartiallyShippedStatus ? 'style="border: 2px solid var(--p-accent);"' : ''}>
                     <div class="fb-order-header" onclick="toggleOrder(this)" ${isPartiallyShippedStatus ? 'style="background: rgba(187, 122, 126, 0.05);"' : ''}>
-                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center; gap:10px;">
                             <span>${orderRowIdx}. ORDER ${o.name} ${isPartiallyShippedStatus ? `<span style="background: var(--p-accent); color: white; padding: 2px 10px; border-radius: 20px; font-size: 11px; margin-left: 8px;">PARTIAL</span> <span style="font-size: 11px; color: var(--p-accent); margin-left:8px; font-weight:600;">(${fulfilledSwatchQty}/${totalSwatchQty} shipped)</span>` : ''}</span>
-                            <svg class="fb-chevron ${idx === 0 ? 'open' : ''}" width="20" height="20" viewBox="0 0 20 20" fill="var(--p-text-subdued)"><path d="M5 7l5 5 5-5H5z"/></svg>
+                            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                                ${shopDomain ? `<button class="fb-view-order-btn" onclick="event.stopPropagation(); window.open('https://admin.shopify.com/store/${shopDomain}/orders/${o.id.split('/').pop()}', '_blank')">📋 View Order</button>` : ''}
+                                <svg class="fb-chevron ${idx === 0 ? 'open' : ''}" width="20" height="20" viewBox="0 0 20 20" fill="var(--p-text-subdued)"><path d="M5 7l5 5 5-5H5z"/></svg>
+                            </div>
                         </div>
                     </div>
                     <div class="fb-order-items" ${idx === 0 ? 'style="display: block;"' : ''}>
@@ -1270,7 +1306,8 @@
                 const r = await fetch(`${PROXY_URL}?type=fulfilled&direction=${dir}${cur ? `&cursor=${cur}` : ''}&_t=${Date.now()}`);
                 const j = await r.json();
                 historyData = j.data.edges;
-                console.log(`[HISTORY FETCH] Received ${historyData.length} items`);
+                if (j.data.shopDomain) shopDomain = j.data.shopDomain;
+                console.log(`[HISTORY FETCH] Received ${historyData.length} items, shopDomain: ${shopDomain}`);
                 const pi = j.data.pageInfo;
                 if (isPagination && cur) {
                     if (dir === 'next') histPage++;
@@ -1293,13 +1330,16 @@
                         const hIdx = (histPage - 1) * 10 + idx + 1;
                         const fulfiller = e.log ? (e.log.scannedBy || e.log.staffEmail) : 'Unknown';
                         return `<div class="fb-order-card" style="padding:15px;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <div style="flex:1;">
                         <b>${hIdx}. ORDER ${e.node.name}</b><br>
                             <small style="color:var(--p-primary)">Status: FULFILLED</small><br>
                                 <small style="color:var(--p-text-subdued)">Fulfilled by: <b>${fulfiller}</b></small>
                             </div>
-                            <div style="text-align:right;"><small>${new Date(e.node.updatedAt).toLocaleString()}</small></div>
+                            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                                ${shopDomain ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${e.node.id.split('/').pop()}', '_blank')">📋 View</button>` : ''}
+                                <small style="color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleString()}</small>
+                            </div>
                     </div>
                 </div>`;
                     }).join('');

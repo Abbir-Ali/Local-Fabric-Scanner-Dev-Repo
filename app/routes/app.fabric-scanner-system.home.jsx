@@ -6,7 +6,7 @@ import BarcodeImage from "../components/BarcodeImage";
 
 // Components
 import { Page, Layout, Card, BlockStack, Text, InlineGrid, Collapsible, Button, Badge, InlineStack, Thumbnail, Pagination, Icon } from "@shopify/polaris"; 
-import { ChevronDownIcon, ChevronUpIcon, PersonIcon } from "@shopify/polaris-icons";
+import { ChevronDownIcon, ChevronUpIcon, PersonIcon, ViewIcon } from "@shopify/polaris-icons";
 import { useState } from "react";
 
 export const loader = async ({ request }) => {
@@ -61,12 +61,13 @@ export const loader = async ({ request }) => {
     fulfilledOrders: fulfilledWithLogs, 
     fulfilledPageInfo: fulfilledData.pageInfo,
     stats: { ...stats, totalFulfilled: liveFulfilledCount, totalPartial: partialData.edges.length },
-    settings
+    settings,
+    shopDomain: session.shop.replace('.myshopify.com', '')
   };
 };
 
 export default function Index() {
-  const { swatchOrders, partialOrders, fulfilledOrders, stats, pendingPageInfo, partialPageInfo, fulfilledPageInfo, settings } = useLoaderData();
+  const { swatchOrders, partialOrders, fulfilledOrders, stats, pendingPageInfo, partialPageInfo, fulfilledPageInfo, settings, shopDomain } = useLoaderData();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
@@ -212,7 +213,7 @@ export default function Index() {
               ) : (
                 <BlockStack gap="400">
                   {swatchOrders.map(({ node: order }, idx) => (
-                    <OrderRow key={order.id} order={order} status="pending" index={(parseInt(searchParams.get("pendingPage") || "1") - 1) * 10 + idx + 1} />
+                    <OrderRow key={order.id} order={order} status="pending" index={(parseInt(searchParams.get("pendingPage") || "1") - 1) * 10 + idx + 1} shopDomain={shopDomain} />
                   ))}
                   <Pagination
                     hasPrevious={pendingPageInfo?.hasPreviousPage}
@@ -241,6 +242,7 @@ export default function Index() {
                       order={order} 
                       logs={logs} 
                       index={(parseInt(searchParams.get("partialPage") || "1") - 1) * 10 + idx + 1} 
+                      shopDomain={shopDomain}
                     />
                   ))}
                   <Pagination
@@ -271,6 +273,7 @@ export default function Index() {
                         status="fulfilled" 
                         logs={edge.logs} 
                         index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * 10 + idx + 1} 
+                        shopDomain={shopDomain}
                       />
                     ))}
                     <Pagination
@@ -290,7 +293,7 @@ export default function Index() {
   );
 }
 
-function PartialOrderRow({ order, logs, index }) {
+function PartialOrderRow({ order, logs, index, shopDomain }) {
   const [open, setOpen] = useState(false);
 
   const fabricItems = order.lineItems.edges.filter(
@@ -354,6 +357,9 @@ function PartialOrderRow({ order, logs, index }) {
 
   if (fabricItems.length === 0) return null;
 
+  const orderId = order.id.split('/').pop(); // Extract ID from GID
+  const orderUrl = `https://admin.shopify.com/store/${shopDomain}/orders/${orderId}`;
+
   return (
     <div style={{ border: '2px solid #ff9900', borderRadius: '8px', overflow: 'hidden' }}>
       <div 
@@ -364,19 +370,28 @@ function PartialOrderRow({ order, logs, index }) {
           cursor: 'pointer',
           display: 'flex', 
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          gap: '16px'
         }}
       >
-        <InlineStack gap="400">
+        <InlineStack gap="400" wrap="nowrap" style={{flex: 1, minWidth: 0}}>
           <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{index}.</Text>
           <Text variant="bodyMd" fontWeight="bold" as="span">{order.name}</Text>
           <Badge tone="warning">PARTIALLY FULFILLED</Badge>
           <Badge tone="info">{progress} items shipped</Badge>
-          <Text tone="subdued" as="span">{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
+          <Text tone="subdued" as="span" style={{whiteSpace: 'nowrap'}}>{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
         </InlineStack>
 
-        <InlineStack gap="400" blockAlign="center">
-           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <InlineStack gap="400" blockAlign="center" wrap="nowrap" style={{flexShrink: 0}}>
+          <Button 
+            icon={ViewIcon} 
+            variant="plain" 
+            onClick={(e) => { e.stopPropagation(); window.open(orderUrl, '_blank'); }}
+            accessibilityLabel="View order"
+          >
+            View Order
+          </Button>
+           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
               <Icon source={PersonIcon} tone="subdued" />
               <Text variant="bodySm" tone="subdued">
                 {primaryLog?.scannedBy || primaryLog?.staffEmail || "Unknown"}
@@ -434,7 +449,7 @@ function PartialOrderRow({ order, logs, index }) {
   );
 }
 
-function OrderRow({ order, status, logs, index }) {
+function OrderRow({ order, status, logs, index, shopDomain }) {
   const [open, setOpen] = useState(false);
 
   const fabricItems = order.lineItems.edges.filter(
@@ -459,6 +474,9 @@ function OrderRow({ order, status, logs, index }) {
 
   const primaryLog = logs?.[0];
 
+  const orderId = order.id.split('/').pop(); // Extract ID from GID
+  const orderUrl = `https://admin.shopify.com/store/${shopDomain}/orders/${orderId}`;
+
   return (
     <div style={{ border: '1px solid #dfe3e8', borderRadius: '8px', overflow: 'hidden' }}>
       <div 
@@ -469,19 +487,28 @@ function OrderRow({ order, status, logs, index }) {
           cursor: 'pointer',
           display: 'flex', 
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          gap: '16px'
         }}
       >
-        <InlineStack gap="400">
+        <InlineStack gap="400" wrap="nowrap" style={{flex: 1, minWidth: 0}}>
           <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{index}.</Text>
           <Text variant="bodyMd" fontWeight="bold" as="span">{order.name}</Text>
           <Badge tone={status === 'fulfilled' ? 'success' : 'attention'}>{status.toUpperCase()}</Badge>
-          <Text tone="subdued" as="span">{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
+          <Text tone="subdued" as="span" style={{whiteSpace: 'nowrap'}}>{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
         </InlineStack>
 
-        <InlineStack gap="400" blockAlign="center">
+        <InlineStack gap="400" blockAlign="center" wrap="nowrap" style={{flexShrink: 0}}>
+          <Button 
+            icon={ViewIcon} 
+            variant="plain" 
+            onClick={(e) => { e.stopPropagation(); window.open(orderUrl, '_blank'); }}
+            accessibilityLabel="View order"
+          >
+            View Order
+          </Button>
            {status === 'fulfilled' && (
-             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
                 <Icon source={PersonIcon} tone="subdued" />
                 <Text variant="bodySm" tone="subdued">
                   {primaryLog?.scannedBy || primaryLog?.staffEmail || "Unknown"}
