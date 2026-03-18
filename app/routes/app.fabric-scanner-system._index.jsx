@@ -56,60 +56,130 @@ export default function Index() {
 
       <Layout>
         <Layout.Section>
-          <Box textAlign="center" padding="4">
-            <div
-              style={{
-                maxWidth: "480px",
-                margin: "0 auto 2rem",
-                borderRadius: "18px",
-                overflow: "hidden",
-                boxShadow: "0 16px 40px rgba(0, 0, 0, 0.18)",
-                background: "linear-gradient(135deg, rgba(255,255,255,0.85), rgba(241,241,241,0.85))",
-              }}
-            >
-              {showGif ? (
-                <img
-                  src="/scanner.gif"
-                  alt="Scanning animation"
-                  style={{ display: "block", width: "100%", height: "auto" }}
-                  onError={() => setShowGif(false)}
-                />
-              ) : (
-                <div
-                  style={{
-                    padding: "3rem 1.5rem",
-                    position: "relative",
-                  }}
-                >
+          <Box
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: "2rem",
+              alignItems: "start",
+              padding: "2rem 0",
+            }}
+          >
+            <Box textAlign="center">
+              <div
+                style={{
+                  maxWidth: "480px",
+                  margin: "0 auto 2rem",
+                  borderRadius: "18px",
+                  overflow: "hidden",
+                  boxShadow: "0 16px 40px rgba(0, 0, 0, 0.18)",
+                  background: "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(241,241,241,0.92))",
+                }}
+              >
+                {showGif ? (
+                  <img
+                    src="/scanner.gif"
+                    alt="Scanning animation"
+                    style={{ display: "block", width: "100%", height: "auto" }}
+                    onError={() => setShowGif(false)}
+                  />
+                ) : (
                   <div
                     style={{
-                      width: "100%",
-                      height: "100px",
-                      background: "linear-gradient(to right, #000 0%, #000 20%, #fff 20%, #fff 40%, #000 40%, #000 60%, #fff 60%, #fff 80%, #000 80%, #000 100%)",
-                      borderRadius: "12px",
+                      padding: "3rem 1.5rem",
                       position: "relative",
-                      overflow: "hidden",
                     }}
                   >
                     <div
                       style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
                         width: "100%",
-                        height: "4px",
-                        background: "rgba(255, 0, 0, 0.8)",
-                        animation: "scan 2s infinite",
+                        height: "100px",
+                        background: "linear-gradient(to right, #000 0%, #000 20%, #fff 20%, #fff 40%, #000 40%, #000 60%, #fff 60%, #fff 80%, #000 80%, #000 100%)",
+                        borderRadius: "12px",
+                        position: "relative",
+                        overflow: "hidden",
                       }}
-                    ></div>
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: "4px",
+                          background: "rgba(255, 0, 0, 0.8)",
+                          animation: "scan 2s infinite",
+                        }}
+                      ></div>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            <Button primary size="large" onClick={() => navigate("/app/home")}> 
-              Get Started
-            </Button>
+              <Box style={{ display: "flex", justifyContent: "center" }}>
+                <Button primary size="large" onClick={() => navigate("/app/home")}> 
+                  Get Started
+                </Button>
+              </Box>
+            </Box>
+
+            <Box style={{ maxWidth: "680px", margin: "0 auto" }}>
+              <Text variant="headingMd" as="h2" alignment="center" style={{ marginBottom: "1rem" }}>
+                How it works
+              </Text>
+              <Box
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "1.25rem",
+                }}
+              >
+                <Box
+                  style={{
+                    padding: "1.5rem",
+                    borderRadius: "14px",
+                    background: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 10px 24px rgba(0,0,0,0.1)",
+                    textAlign: "left",
+                  }}
+                >
+                  <Text as="p" variant="headingSm" fontWeight="semibold">
+                    1. Open the scanner
+                  </Text>
+                  <Text tone="subdued">Navigate to the scanner screen and allow camera access.</Text>
+                </Box>
+
+                <Box
+                  style={{
+                    padding: "1.5rem",
+                    borderRadius: "14px",
+                    background: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 10px 24px rgba(0,0,0,0.1)",
+                    textAlign: "left",
+                  }}
+                >
+                  <Text as="p" variant="headingSm" fontWeight="semibold">
+                    2. Scan the barcode
+                  </Text>
+                  <Text tone="subdued">Hold your phone over the barcode and let the app capture it instantly.</Text>
+                </Box>
+
+                <Box
+                  style={{
+                    padding: "1.5rem",
+                    borderRadius: "14px",
+                    background: "rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 10px 24px rgba(0,0,0,0.1)",
+                    textAlign: "left",
+                  }}
+                >
+                  <Text as="p" variant="headingSm" fontWeight="semibold">
+                    3. Fulfill orders faster
+                  </Text>
+                  <Text tone="subdued">Generate shipping labels and mark items as fulfilled in seconds.</Text>
+                </Box>
+              </Box>
+            </Box>
           </Box>
         </Layout.Section>
       </Layout>
