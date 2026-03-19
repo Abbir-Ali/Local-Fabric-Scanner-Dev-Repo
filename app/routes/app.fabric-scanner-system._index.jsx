@@ -116,7 +116,7 @@ export default function Index() {
               </div>
 
               <Box style={{ display: "flex", justifyContent: "center" }}>
-                <Button primary size="large" onClick={() => navigate("/app/home")}> 
+                <Button primary size="large" onClick={() => navigate("/app/fabric-scanner-system/home")}> 
                   Get Started
                 </Button>
               </Box>
