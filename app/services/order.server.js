@@ -130,26 +130,34 @@ export async function getFulfilledFabricOrders(admin, cursor = null, direction =
   }
 }
 
-export async function getFabricInventory(admin, cursor = null, { query = "", sortKey = "ID", reverse = false, direction = "next", locationId = null } = {}) {
+export async function getFabricInventory(admin, cursor = null, { query = "", sortKey = "ID", reverse = false, direction = "next", locationId = null, isBinSearch = false } = {}) {
   try {
-    const activeSortKey = query ? "RELEVANCE" : sortKey;
-    const activeReverse = query ? false : reverse;
-    const escapedQuery = query.replace(/"/g, '\\"');
-    const binToken = query.startsWith('#') ? query.substring(1) : query;
-    const finalQuery = query 
-      ? `product_type:"Swatch Item" AND ("${escapedQuery}" OR "${binToken}")` 
-      : 'product_type:"Swatch Item"';
+    // For BIN searches, don't use sorting to ensure we get diverse products
+    const activeSortKey = (query && !isBinSearch) ? "RELEVANCE" : (isBinSearch ? "ID" : sortKey);
+    const activeReverse = (query && !isBinSearch) ? false : (isBinSearch ? false : reverse);
+    
+    let finalQuery;
+    if (isBinSearch) {
+      // For BIN searches, fetch all swatch items (no text search) - we'll filter by BIN on server
+      finalQuery = 'product_type:"Swatch Item"';
+    } else {
+      // For regular searches, use Shopify's search
+      const escapedQuery = query.replace(/"/g, '\\"');
+      finalQuery = query 
+        ? `product_type:"Swatch Item" AND "${escapedQuery}"` 
+        : 'product_type:"Swatch Item"';
+    }
 
     const paginationArgs = direction === "prev" ? `last: 10, before: "${cursor}"` : `first: 10, after: ${cursor ? `"${cursor}"` : "null"}`;
 
-    console.log(`[INVENTORY SEARCH] Variables:`, { finalQuery, activeSortKey, activeReverse, locationId });
+    console.log(`[INVENTORY SEARCH] Variables:`, { finalQuery, activeSortKey, activeReverse, isBinSearch, pagination: isBinSearch ? '100 items' : '10 items' });
 
     let resJson;
     try {
       const response = await admin.graphql(
         `#graphql
         query getInventory($query: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
-          products(${paginationArgs}, query: $query, sortKey: $sortKey, reverse: $reverse) {
+          products(${isBinSearch ? (direction === "prev" ? "last: 100, before: \"" + cursor + "\"" : "first: 100, after: " + (cursor ? "\"" + cursor + "\"" : "null")) : paginationArgs}, query: $query, sortKey: $sortKey, reverse: $reverse) {
             pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
             edges {
               node {
@@ -207,8 +215,51 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
       console.error("[INVENTORY SEARCH] GRAPHQL ERRORS:", JSON.stringify(resJson.errors, null, 2));
     }
 
-    const edges = resJson.data?.products?.edges || [];
-    console.log(`[INVENTORY SEARCH] Success: Found ${edges.length} products for query: "${finalQuery}"`);
+    let edges = resJson.data?.products?.edges || [];
+    
+    // Debug: Log metafields for first few products
+    if (edges.length > 0) {
+      console.log(`[DEBUG METAFIELDS] First product metafields:`, JSON.stringify(edges[0].node.metafields?.edges || [], null, 2));
+    }
+    
+    // Apply BIN filtering server-side if this is a BIN search
+    if (isBinSearch && query) {
+      const searchLower = query.toLowerCase();
+      const beforeFilter = edges.length;
+      console.log(`[BIN SEARCH DEBUG] Filtering ${beforeFilter} products for BIN: "${query}"`);
+      
+      edges = edges.filter((edge) => {
+        const metafields = edge.node.metafields?.edges || [];
+        const binMetafield = metafields.find(mf => mf.node.key === 'bin_number' && mf.node.namespace === 'custom');
+        const binValue = binMetafield?.node.value || '';
+        
+        // Debug: Log all BIN values we encounter
+        if (binValue) {
+          console.log(`[BIN VALUE FOUND] Product "${edge.node.title}" has BIN: "${binValue}"`);
+        }
+        
+        const matches = binValue && binValue.toLowerCase().includes(searchLower);
+        if (matches) {
+          console.log(`[BIN MATCH] Query "${query}" matched BIN "${binValue}" for product ${edge.node.title}`);
+        }
+        return matches;
+      });
+      console.log(`[INVENTORY BIN FILTER] Server-side filtered from ${beforeFilter} to ${edges.length} items for BIN search: "${query}"`);
+      
+      // If no matches found, log all available BIN values for debugging
+      if (edges.length === 0) {
+        console.log(`[BIN SEARCH DEBUG] No matches found for "${query}". Available BIN values in this batch:`);
+        resJson.data?.products?.edges?.forEach(edge => {
+          const metafields = edge.node.metafields?.edges || [];
+          const binMetafield = metafields.find(mf => mf.node.key === 'bin_number' && mf.node.namespace === 'custom');
+          if (binMetafield) {
+            console.log(`  - "${binMetafield.node.value}" (${edge.node.title})`);
+          }
+        });
+      }
+    }
+
+    console.log(`[INVENTORY SEARCH] Success: Found ${edges.length} products for query: "${finalQuery}"${isBinSearch ? ' (BIN filtered)' : ''}`);
     if (edges.length === 0 && !query) {
        console.log("[INVENTORY SEARCH] WARNING: No products found with 'Swatch Item' type. Checking all products...");
     }

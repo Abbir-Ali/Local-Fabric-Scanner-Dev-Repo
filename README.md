@@ -85,6 +85,7 @@ Please read the [documentation for @shopify/shopify-app-remix](https://www.npmjs
 
 This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
 The database is defined as a Prisma schema in `prisma/schema.prisma`.
+For local development, the SQLite file is located at `prisma/dev.sqlite`.
 
 This use of SQLite works in production if your app runs as a single instance.
 The database that works best for you depends on the data your app needs and how it is queried.

@@ -27,12 +27,20 @@ export const loader = async ({ request }) => {
   const sortKey = url.searchParams.get("sortKey") || "CREATED_AT";
   const reverse = url.searchParams.get("reverse") === "true";
 
+  // Detect if this is a BIN search (same logic as scanner)
+  const isBinSearch = query && (
+    query.toLowerCase().includes('bin') ||
+    /^\d/.test(query) || // starts with number
+    /^[a-zA-Z]+\d+/.test(query) || // letter(s) followed by number(s)
+    /^[a-zA-Z]\d+/.test(query) // letter followed by number(s)
+  );
+
   const locations = await getShopLocations(admin);
   const primaryLocation = locations.find(loc => loc.isPrimary) || locations[0];
   const locationId = url.searchParams.get("locationId") || primaryLocation?.id || null;
   
   const { edges, pageInfo } = await getFabricInventory(admin, cursor, { 
-    query, sortKey, reverse, direction, locationId 
+    query, sortKey, reverse, direction, locationId, isBinSearch
   });
   
   const globalStats = await getGlobalInventoryStats(admin, locationId);
@@ -49,7 +57,8 @@ export const loader = async ({ request }) => {
     initialQuery: query,
     initialSort: sortKey,
     initialReverse: reverse,
-    globalStats
+    globalStats,
+    isBinSearch
   };
 };
 
@@ -147,7 +156,7 @@ export const action = async ({ request }) => {
  * Main page component.
  */
 export default function FabricInventory() {
-  const { products: rawProducts, pageInfo, page, shopDomain, locations, currentLocationId, initialQuery, initialSort, initialReverse, globalStats: initialGlobalStats } = useLoaderData();
+  const { products: rawProducts, pageInfo, page, shopDomain, locations, currentLocationId, initialQuery, initialSort, initialReverse, globalStats: initialGlobalStats, isBinSearch: initialIsBinSearch } = useLoaderData();
   const products = rawProducts || [];
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -156,6 +165,7 @@ export default function FabricInventory() {
   const { mode, setMode } = useSetIndexFiltersMode();
 
   const stats = initialGlobalStats || { total: 0, lowStock: 0, outOfStock: 0 };
+  const isBinSearch = initialIsBinSearch || false;
 
 
   const locationOptions = useMemo(() => {
@@ -619,6 +629,14 @@ export default function FabricInventory() {
         <Layout.Section>
           <Card padding="0">
             <Box minHeight="400px">
+            {isBinSearch && queryValue && (
+              <Box padding="400" borderBottomWidth="025" borderColor="border" background="bg-fill-tertiary">
+                <InlineStack gap="200" align="start">
+                  <Badge tone="info">BIN Search Active</Badge>
+                  <Text variant="bodySm">Searching for BIN: <strong>{queryValue}</strong></Text>
+                </InlineStack>
+              </Box>
+            )}
             <IndexFilters
               sortOptions={sortOptions}
               sortSelected={sortSelected}

@@ -64,8 +64,9 @@ export const loader = async ({ request }) => {
         const direction = url.searchParams.get("direction") || "next";
         const sortKey = url.searchParams.get("sortKey") || "CREATED_AT";
         const reverse = url.searchParams.get("reverse") === "true";
+        const isBinSearch = url.searchParams.get("isBinSearch") === "true";
         
-        const result = await getFabricInventory(admin, cursor, { query, sortKey, reverse, direction });
+        const result = await getFabricInventory(admin, cursor, { query, sortKey, reverse, direction, isBinSearch });
         return json({ data: result });
       }
 
