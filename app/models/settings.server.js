@@ -47,13 +47,39 @@ export async function getStaffMembers(shop) {
   });
 }
 
+function validateStaffData({ name, email, pin }) {
+  const cleanedName = String(name || "").trim();
+  const cleanedEmail = String(email || "").trim();
+  const cleanedPin = String(pin || "").trim();
+
+  if (!cleanedName || !cleanedEmail || !cleanedPin) {
+    throw new Error("Name, email, and PIN are required.");
+  }
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanedEmail)) {
+    throw new Error("Please enter a valid email address.");
+  }
+
+  if (!/^\d{4,6}$/.test(cleanedPin)) {
+    throw new Error("PIN must be 4 to 6 digits.");
+  }
+
+  return {
+    name: cleanedName,
+    email: cleanedEmail,
+    pin: cleanedPin,
+  };
+}
+
 export async function createStaffMember(shop, { name, email, pin }) {
+  const validated = validateStaffData({ name, email, pin });
+
   const existing = await db.staff.findFirst({
     where: {
       shop,
       OR: [
-        { name: { equals: name } },
-        { email: { equals: email } }
+        { name: { equals: validated.name } },
+        { email: { equals: validated.email } }
       ]
     }
   });
@@ -63,14 +89,25 @@ export async function createStaffMember(shop, { name, email, pin }) {
   }
 
   return await db.staff.create({
-    data: { shop, name, email, pin },
+    data: { shop, ...validated },
   });
 }
 
 export async function updateStaffMember(shop, id, { name, email, pin }) {
-  return await db.staff.update({
-    where: { shop, id: parseInt(id) },
-    data: { name, email, pin },
+  const validated = validateStaffData({ name, email, pin });
+  const parsedId = parseInt(id, 10);
+
+  const result = await db.staff.updateMany({
+    where: { shop, id: parsedId },
+    data: { ...validated },
+  });
+
+  if (result.count === 0) {
+    throw new Error("Staff member not found.");
+  }
+
+  return await db.staff.findUnique({
+    where: { id: parsedId },
   });
 }
 

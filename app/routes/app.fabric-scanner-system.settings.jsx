@@ -115,19 +115,40 @@ export default function Settings() {
   const [newEmail, setNewEmail] = useState("");
   const [newPin, setNewPin] = useState("");
   const [showNewPin, setShowNewPin] = useState(false);
+  const [staffFormError, setStaffFormError] = useState("");
 
   const handleModalSubmit = () => {
+    const name = newName.trim();
+    const email = newEmail.trim();
+    const pin = newPin.trim();
+
+    if (!name || !email || !pin) {
+      setStaffFormError("Name, email, and PIN are required.");
+      return;
+    }
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setStaffFormError("Please enter a valid email address.");
+      return;
+    }
+
+    if (!/^\d{4,6}$/.test(pin)) {
+      setStaffFormError("PIN must be 4 to 6 digits.");
+      return;
+    }
+
     const actionType = editingStaff ? "updateStaff" : "createStaff";
     const fd = new FormData();
     fd.append("actionType", actionType);
-    fd.append("name", newName);
-    fd.append("email", newEmail);
-    fd.append("pin", newPin);
+    fd.append("name", name);
+    fd.append("email", email);
+    fd.append("pin", pin);
     if (editingStaff) fd.append("id", editingStaff.id);
 
     submit(fd, { method: "post" });
     setNewName(""); setNewEmail(""); setNewPin(""); setShowNewPin(false); setEditingStaff(null);
     setIsModalOpen(false);
+    setStaffFormError("");
   };
 
   const handleEdit = (member) => {
@@ -385,7 +406,7 @@ export default function Settings() {
 
       <Modal
         open={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setNewName(""); setNewEmail(""); setNewPin(""); setShowNewPin(false); setEditingStaff(null); }}
+        onClose={() => { setIsModalOpen(false); setNewName(""); setNewEmail(""); setNewPin(""); setShowNewPin(false); setEditingStaff(null); setStaffFormError(""); }}
         title={editingStaff ? "Edit Staff Member" : "Add New Staff Member"}
         primaryAction={{
           content: editingStaff ? "Update Member" : "Create Member",
@@ -394,6 +415,7 @@ export default function Settings() {
       >
         <Modal.Section>
           <FormLayout>
+            {staffFormError ? <Banner tone="critical">{staffFormError}</Banner> : null}
             <TextField label="Name" value={newName} onChange={setNewName} autoComplete="off" required />
             <TextField label="Email" value={newEmail} onChange={setNewEmail} type="email" autoComplete="off" required />
             <TextField 
