@@ -660,8 +660,8 @@
                     : ''
             }
 
-                        <!-- Shipping Label Badge (below status) -->
-                        ${showLabelBadge
+                        <!-- Shipping Label Button (shown for fulfilled items and verified items) -->
+                        ${isFulfilled || showLabelBadge
                 ? `<div style="background:var(--p-accent); color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; cursor:pointer; width:100%; text-align:center;" onclick="printShippingLabel('${o.id
                 }', '${o.name}', '${(o.shippingAddress?.name || '').replace(/'/g, "\\'")}', '${(
                     o.shippingAddress?.address1 || ''
@@ -699,10 +699,10 @@
         var html = `<html><head><title>Label - ${name}</title>
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { 
+                    html, body { 
                         font-family: Arial, sans-serif; 
-                        width: 100vw; 
-                        height: 100vh; 
+                        width: 100%;
+                        height: 100%;
                         overflow: hidden;
                         background: white;
                     }
@@ -710,11 +710,11 @@
                         @page { 
                             margin: 0;
                         }
-                        body {
-                            width: 100vw;
-                            height: 100vh;
-                            padding: 0.05in;
+                        html, body {
+                            width: 100%;
+                            height: 100%;
                             margin: 0;
+                            padding: 0;
                         }
                     }
                     .label-container { 
@@ -722,9 +722,11 @@
                         align-items: center; 
                         justify-content: space-between; 
                         gap: 0.08in; 
-                        height: 100vh;
                         width: 100%;
+                        height: 100%;
                         padding: 0.05in;
+                        page-break-after: avoid;
+                        page-break-inside: avoid;
                     }
                     .logo-box { 
                         width: 0.45in; 
@@ -779,13 +781,11 @@
                     </div>
                 </div>
                 ${s}>
-                    window.onload = function() { 
-                        document.body.style.margin = '0';
-                        document.body.style.padding = '0';
+                    window.onload = function() {
                         setTimeout(function() { 
                             window.print(); 
-                            setTimeout(function() { window.close(); }, 300);
-                        }, 300); 
+                            window.close();
+                        }, 250); 
                     };
                 ${se}
             </body></html>`;
