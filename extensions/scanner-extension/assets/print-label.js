@@ -701,20 +701,18 @@
                     * { margin: 0; padding: 0; box-sizing: border-box; }
                     body { 
                         font-family: Arial, sans-serif; 
-                        width: 2.625in; 
-                        height: 1in; 
+                        width: 100vw; 
+                        height: 100vh; 
                         overflow: hidden;
                         background: white;
                     }
                     @media print {
                         @page { 
-                            size: 2.625in 1in; 
-                            margin: 0; 
-                            padding: 0;
+                            margin: 0;
                         }
                         body {
-                            width: 2.625in;
-                            height: 1in;
+                            width: 100vw;
+                            height: 100vh;
                             padding: 0.05in;
                             margin: 0;
                         }
@@ -724,8 +722,8 @@
                         align-items: center; 
                         justify-content: space-between; 
                         gap: 0.08in; 
-                        height: 0.9in;
-                        width: 2.525in;
+                        height: 100vh;
+                        width: 100%;
                         padding: 0.05in;
                     }
                     .logo-box { 
