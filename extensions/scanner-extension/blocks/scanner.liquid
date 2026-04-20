@@ -1112,6 +1112,210 @@
       box-shadow: none;
     }
   }
+
+  /* Toast Notification System */
+  .fb-toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 400px;
+    pointer-events: none;
+  }
+
+  .fb-toast {
+    background: var(--p-white);
+    border: 1px solid var(--p-border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 300px;
+    pointer-events: all;
+    animation: fb-toastSlideIn 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .fb-toast::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+  }
+
+  .fb-toast.fb-toast-success::before {
+    background: var(--p-success);
+  }
+
+  .fb-toast.fb-toast-error::before {
+    background: #d32f2f;
+  }
+
+  .fb-toast.fb-toast-warning::before {
+    background: #f57c00;
+  }
+
+  .fb-toast.fb-toast-info::before {
+    background: var(--p-primary);
+  }
+
+  .fb-toast-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .fb-toast-success .fb-toast-icon {
+    background: rgba(72, 91, 89, 0.1);
+    color: var(--p-success);
+  }
+
+  .fb-toast-error .fb-toast-icon {
+    background: rgba(211, 47, 47, 0.1);
+    color: #d32f2f;
+  }
+
+  .fb-toast-warning .fb-toast-icon {
+    background: rgba(245, 124, 0, 0.1);
+    color: #f57c00;
+  }
+
+  .fb-toast-info .fb-toast-icon {
+    background: rgba(196, 160, 146, 0.1);
+    color: var(--p-primary);
+  }
+
+  .fb-toast-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fb-toast-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--p-text);
+    margin-bottom: 4px;
+  }
+
+  .fb-toast-message {
+    font-size: 13px;
+    color: var(--p-text-subdued);
+    line-height: 1.4;
+    word-wrap: break-word;
+  }
+
+  .fb-toast-close {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--p-text-subdued);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .fb-toast-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--p-text);
+  }
+
+  @keyframes fb-toastSlideIn {
+    0% {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .fb-toast.fb-toast-exit {
+    animation: fb-toastSlideOut 0.3s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  }
+
+  @keyframes fb-toastSlideOut {
+    0% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .fb-toast-container {
+      top: 10px;
+      right: 10px;
+      left: 10px;
+      max-width: none;
+    }
+
+    .fb-toast {
+      min-width: 0;
+      width: 100%;
+    }
+  }
+
+  /* Login Error Styling */
+  .fb-login-error {
+    margin-top: 15px;
+    padding: 12px 16px;
+    background: #ffebee;
+    border: 1px solid #ef5350;
+    border-radius: 8px;
+    color: #c62828;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: fb-shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+
+  .fb-login-error svg {
+    flex-shrink: 0;
+  }
+
+  @keyframes fb-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+      transform: translateX(-5px);
+    }
+    20%,
+    40%,
+    60%,
+    80% {
+      transform: translateX(5px);
+    }
+  }
 </style>
 
 <div id="fabric-scanner-root">
@@ -1203,6 +1407,8 @@
         Clear Old Session
       </button>
 
+      <div id="login-error" style="display:none;"></div>
+
       <div
         id="session-warning"
         style="display: none; margin-top: 20px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; font-size: 13px; color: #856404;"
@@ -1268,6 +1474,8 @@
     </div>
   </div>
 </div>
+
+<div id="fb-toast-container" class="fb-toast-container"></div>
 
 <div
   id="camera-modal"

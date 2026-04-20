@@ -3,6 +3,52 @@
     const STORAGE_KEY_PRINTED = 'fb_printed_labels_stable';
     const PROXY_URL = '/apps/fabric-scanner/get';
 
+    // ── Toast notification system ─────────────────────────────────────────
+    const fbToast = (message, type = 'info', title = '', duration = 4000) => {
+        const container = document.getElementById('fb-toast-container');
+        if (!container) return;
+
+        const icons = {
+            success: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+            error:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+            warning: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+            info:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+        };
+        const defaultTitles = { success: 'Success', error: 'Error', warning: 'Warning', info: 'Info' };
+
+        const toast = document.createElement('div');
+        toast.className = `fb-toast fb-toast-${type}`;
+        toast.innerHTML = `
+            <div class="fb-toast-icon">${icons[type] || icons.info}</div>
+            <div class="fb-toast-content">
+                <div class="fb-toast-title">${title || defaultTitles[type] || 'Notice'}</div>
+                <div class="fb-toast-message">${message}</div>
+            </div>
+            <button class="fb-toast-close" aria-label="Dismiss">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>`;
+
+        const dismiss = () => {
+            toast.classList.add('fb-toast-exit');
+            toast.addEventListener('animationend', () => toast.remove(), { once: true });
+        };
+        toast.querySelector('.fb-toast-close').onclick = dismiss;
+        container.appendChild(toast);
+        if (duration > 0) setTimeout(dismiss, duration);
+    };
+
+    const fbLoginError = (message) => {
+        const el = document.getElementById('login-error');
+        if (!el) return;
+        el.innerHTML = `<div class="fb-login-error"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>${message}</div>`;
+        el.style.display = 'block';
+    };
+
+    const fbClearLoginError = () => {
+        const el = document.getElementById('login-error');
+        if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+    };
+
     let verifiedItems = new Set(),
         printedLabels = new Set(),
         inventoryData = [],
@@ -219,6 +265,9 @@
         }
     };
 
+    document.getElementById('staff-id').oninput = fbClearLoginError;
+    document.getElementById('staff-pass').oninput = fbClearLoginError;
+
     document.getElementById('login-btn').onclick = async () => {
         const id = document.getElementById('staff-id').value,
             pin = document.getElementById('staff-pass').value;
@@ -234,9 +283,12 @@
                 console.log('[LOGIN] Current user set to:', currentUser);
                 localStorage.setItem('fb_session_stable', JSON.stringify(currentUser));
                 showApp();
-            } else alert('Invalid login');
+                fbClearLoginError();
+            } else {
+                fbLoginError('Invalid username or PIN. Please try again.');
+            }
         } catch (e) {
-            alert('Error connecting to server');
+            fbLoginError('Unable to connect. Please check your connection and try again.');
         } finally {
             setLoader(false);
         }
@@ -278,31 +330,32 @@
             } else if (target === 'history-pane') {
                 if (historyData.length > 0) {
                     console.log(`[HISTORY] Using cached data (${historyData.length} items, page ${histPage})`);
-                    // Re-render history inline
                     document.getElementById('history-container').innerHTML = historyData
                         .map((e, idx) => {
                             const hIdx = (histPage - 1) * 10 + idx + 1;
                             const fulfiller = e.log ? e.log.scannedBy || e.log.staffEmail : 'Unknown';
-                            return `<div class="fb-order-card" style="padding:15px; border-radius:12px; border:1px solid var(--p-border);">
-                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                                    <div style="flex:1;">
-                                        <b style="font-size:14px;">${hIdx}. ORDER ${e.node.name}</b><br>
-                                        <div style="margin-top:4px;">
-                                            <span style="color:var(--p-success); font-weight:700; font-size:11px; letter-spacing:0.5px;">FULFILLED</span><br>
-                                            <small style="color:var(--p-text-subdued)">Fulfilled by: <b>${fulfiller}</b></small>
-                                        </div>
+                            const orderId = e.node.id.split('/').pop();
+                            const hsa = e.node.shippingAddress || {};
+                            const shippingName = (hsa.name || '').replace(/'/g, "\\'");
+                            const shippingAddr = [hsa.company, hsa.address1, hsa.address2, hsa.city, hsa.zip, hsa.provinceCode, hsa.country].filter(Boolean).join(', ').replace(/'/g, "\\'");
+                            return `<div class="fb-order-card">
+                                <div style="padding:14px 15px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+                                    <div style="flex:1; min-width:0;">
+                                        <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${hIdx}. ORDER ${e.node.name}</div>
+                                        <div style="font-size:12px; color:var(--p-success); font-weight:600; margin-bottom:2px;">✓ FULFILLED</div>
+                                        <div style="font-size:12px; color:var(--p-text-subdued);">By: <b>${fulfiller}</b></div>
                                     </div>
-                                    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
                                         ${shopDomain
-                                    ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${e.node.id
-                                        .split('/')
-                                        .pop()}', '_blank')">📋 View</button>`
-                                    : ''
-                                }
-                                        <small style="color:var(--p-text-subdued); font-size:11px; white-space:nowrap;">${new Date(
-                                    e.node.updatedAt
-                                ).toLocaleDateString()}</small>
+                                        ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${orderId}', '_blank')">📋 View Order</button>`
+                                        : ''
+                                    }
+                                        <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleDateString()}</div>
+                                        <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
                                     </div>
+                                </div>
+                                <div style="padding:0 15px 14px;">
+                                    <button class="fb-btn" style="width:100%; height:38px; font-size:12px; font-weight:600; background:var(--p-accent); color:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; gap:5px;" onclick="printShippingLabel('${e.node.id}', '${e.node.name}', '${shippingName}', '${shippingAddr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 6 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg> Print Label</button>
                                 </div>
                             </div>`;
                         })
@@ -516,7 +569,6 @@
 
                 if (fabrics.length === 0) return '';
                 const allVerified = fabrics.every((x) => verifiedItems.has(x.node.id));
-                const labelPrinted = printedLabels.has(o.id);
                 const orderRowIdx = (ordPage - 1) * 10 + idx + 1;
 
                 // Check if order is partially fulfilled
@@ -540,6 +592,12 @@
 
                 const fulfilledItems = allFabrics.filter((fx) => fulfilledLineItemIds.has(fx.node.id));
                 const unfulfilledItems = allFabrics.filter((fx) => !fulfilledLineItemIds.has(fx.node.id));
+
+                // Build full shipping address string
+                const sa = o.shippingAddress || {};
+                const addrParts = [sa.company, sa.address1, sa.address2, sa.city, sa.zip, sa.provinceCode, sa.country].filter(Boolean);
+                const fullAddr = addrParts.join(', ').replace(/'/g, "\\'");
+                const shipName = (sa.name || '').replace(/'/g, "\\'");
 
                 return `<div class="fb-order-card" ${isPartiallyShippedStatus ? 'style="border: 2px solid var(--p-accent);"' : ''
                     }>
@@ -582,32 +640,15 @@
                         )
                         .join('')}
 
-                        ${allVerified
-                        ? `
-                            <div style="padding:15px; text-align:center; background:#f9fafb; border-top: 1px solid #eee;">
-                                ${!labelPrinted
-                            ? `<button class="fb-btn fb-btn-secondary" style="width:100%; height:45px; font-size:15px; background:var(--p-accent); color:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="printShippingLabel('${o.id
-                            }', '${o.name}', '${(o.shippingAddress?.name || '').replace(/'/g, "\\'")}', '${(
-                                o.shippingAddress?.address1 || ''
-                            ).replace(/'/g, "\\'")}, ${(o.shippingAddress?.city || '').replace(
-                                /'/g,
-                                "\\'"
-                            )}', true)">🏷 Generate Shipping Label</button>`
-                            : `<button class="fb-btn fb-btn-success" style="width:100%; height:45px; font-size:15px;" onclick="fulfillNow('${o.id}')">Fulfill Order ${o.name}</button>`
+                        <div style="padding:12px 15px; background:#f9fafb; border-top: 1px solid #eee; display:flex; gap:8px;">
+                            <button class="fb-btn" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; background:var(--p-accent); color:#fff; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0 10px; white-space:nowrap; overflow:hidden;" onclick="printShippingLabel('${o.id}', '${o.name}', '${shipName}', '${fullAddr}', true)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 6 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Print Label</span></button>
+                            ${allVerified
+                            ? `<button class="fb-btn fb-btn-success" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; padding:0 10px; white-space:nowrap; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:5px;" onclick="fulfillNow('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Fulfill Order</span></button>`
+                            : verifiedItems.size > 0 && fabrics.some((fx) => verifiedItems.has(fx.node.id))
+                                ? `<button class="fb-btn" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; background:#485b59; color:#fff; padding:0 10px; white-space:nowrap; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:5px;" onclick="fulfillNow('${o.id}', true)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M5 12h14M12 5l7 7-7 7"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Ship Verified (${fabrics.filter((fx) => verifiedItems.has(fx.node.id)).length})</span></button>`
+                                : ''
                         }
-                            </div>
-                        `
-                        : verifiedItems.size > 0 && fabrics.some((fx) => verifiedItems.has(fx.node.id))
-                            ? `
-                            <div style="padding:15px; text-align:center; background:rgba(187, 122, 126, 0.03); border-top: 1px solid var(--p-border);">
-                                <button class="fb-btn" style="width:100%; background: var(--p-accent);" onclick="fulfillNow('${o.id
-                            }', true)">Ship Verified Swatches (${fabrics.filter((fx) => verifiedItems.has(fx.node.id)).length
-                            })</button>
-                                <div style="margin-top: 8px; font-size: 11px; color: var(--p-accent); font-weight:500;">Only scanned items will be fulfilled.</div>
-                            </div>
-                        `
-                            : ''
-                    }
+                        </div>
                     </div>
                 </div>`;
             })
@@ -619,8 +660,6 @@
         const done = verifiedItems.has(fx.node.id);
         const fulfiller = fulfillerMap[fx.node.id] || 'admin';
         const sku = fx.node.variant?.sku || fx.node.variant?.product?.sku || 'N/A';
-        const labelPrinted = printedLabels.has(o.id);
-        const showLabelBadge = done && (!allVerified || labelPrinted);
 
         return `<div style="display:flex; flex-direction:column; gap:8px; padding:12px; border-bottom:1px solid var(--p-border); position:relative; ${done ? 'background:rgba(72, 91, 89, 0.05)' : isFulfilled ? 'background:rgba(130, 115, 108, 0.02)' : ''
             }">
@@ -652,24 +691,12 @@
                     </div>
 
                     <!-- Status Column (top-aligned badges) -->
-                    <div style="flex:0 0 120px; display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+                    <div style="flex:0 0 100px; display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
                         ${isFulfilled
                 ? `<div style="background:var(--p-success); color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; width:100%; text-align:center;">✓ FULFILLED</div>`
                 : done
                     ? `<div style="background:rgba(72, 91, 89, 0.1); color:var(--p-success); padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; border:1px solid var(--p-success); letter-spacing:0.5px; white-space:nowrap; width:100%; text-align:center;">✓ VERIFIED</div>`
                     : ''
-            }
-
-                        <!-- Shipping Label Button (shown for fulfilled items and verified items) -->
-                        ${isFulfilled || showLabelBadge
-                ? `<div style="background:var(--p-accent); color:#fff; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; cursor:pointer; width:100%; text-align:center;" onclick="printShippingLabel('${o.id
-                }', '${o.name}', '${(o.shippingAddress?.name || '').replace(/'/g, "\\'")}', '${(
-                    o.shippingAddress?.address1 || ''
-                ).replace(/'/g, "\\'")}, ${(o.shippingAddress?.city || '').replace(
-                    /'/g,
-                    "\\'"
-                )}')">🏷 LABEL</div>`
-                : ''
             }
                     </div>
                 </div>
@@ -692,7 +719,7 @@
     window.printShippingLabel = async (id, name, customer, address, isBulk = false) => {
         setLoader(true);
         const logo = currentUser?.brandLogo || '';
-        var win = window.open('', '_blank', 'width=300,height=150'); // Thermal label size
+        var win = window.open('', '_blank');
         var s = '<script',
             se = '</' + 'script>';
 
@@ -729,8 +756,8 @@
                         page-break-inside: avoid;
                     }
                     .logo-box { 
-                        width: 0.45in; 
-                        height: 0.45in; 
+                        width: 0.7in; 
+                        height: 0.7in; 
                         display: flex; 
                         align-items: center; 
                         justify-content: center; 
@@ -738,8 +765,8 @@
                         background: white;
                     }
                     .logo-box img { 
-                        max-width: 0.4in; 
-                        max-height: 0.4in; 
+                        max-width: 0.65in; 
+                        max-height: 0.65in; 
                         object-fit: contain; 
                     }
                     .address-box { 
@@ -760,10 +787,9 @@
                     }
                     .address-line { 
                         font-size: 7pt; 
-                        line-height: 1.1;
+                        line-height: 1.2;
                         word-wrap: break-word;
                         overflow: hidden;
-                        max-height: 0.3in;
                         color: #000;
                     }
                 </style>
@@ -772,12 +798,12 @@
                     <div class="logo-box">
                         ${logo
                 ? `<img src="${logo}" alt="Logo">`
-                : '<div style="border: 1px solid #ccc; width: 0.35in; height: 0.35in; font-size: 6pt; display: flex; align-items: center; justify-content: center; color: #999;">LOGO</div>'
+                : '<div style="border: 1px solid #ccc; width: 0.6in; height: 0.6in; font-size: 6pt; display: flex; align-items: center; justify-content: center; color: #999;">LOGO</div>'
             }
                     </div>
                     <div class="address-box">
                         <div class="customer-name">${(customer || 'Customer').substring(0, 30)}</div>
-                        <div class="address-line">${(address || 'Address N/A').substring(0, 60)}</div>
+                        <div class="address-line">${address || 'Address N/A'}</div>
                     </div>
                 </div>
                 ${s}>
@@ -842,26 +868,30 @@
                     .map((e, idx) => {
                         const hIdx = (histPage - 1) * 10 + idx + 1;
                         const fulfiller = e.log ? e.log.scannedBy || e.log.staffEmail : 'Unknown';
-                        return `<div class="fb-order-card" style="padding:15px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                    <div style="flex:1;">
-                        <b>${hIdx}. ORDER ${e.node.name}</b><br>
-                            <small style="color:var(--p-primary)">Status: FULFILLED</small><br>
-                                <small style="color:var(--p-text-subdued)">Fulfilled by: <b>${fulfiller}</b></small>
+                        const orderId = e.node.id.split('/').pop();
+                        const hsa = e.node.shippingAddress || {};
+                        const shippingName = (hsa.name || '').replace(/'/g, "\\'");
+                        const shippingAddr = [hsa.company, hsa.address1, hsa.address2, hsa.city, hsa.zip, hsa.provinceCode, hsa.country].filter(Boolean).join(', ').replace(/'/g, "\\'");
+                        return `<div class="fb-order-card">
+                            <div style="padding:14px 15px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+                                <div style="flex:1; min-width:0;">
+                                    <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${hIdx}. ORDER ${e.node.name}</div>
+                                    <div style="font-size:12px; color:var(--p-success); font-weight:600; margin-bottom:2px;">✓ FULFILLED</div>
+                                    <div style="font-size:12px; color:var(--p-text-subdued);">By: <b>${fulfiller}</b></div>
+                                </div>
+                                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
+                                    ${shopDomain
+                                    ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${orderId}', '_blank')">📋 View Order</button>`
+                                    : ''
+                                }
+                                    <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleDateString()}</div>
+                                    <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                                </div>
                             </div>
-                            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                                ${shopDomain
-                                ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${e.node.id
-                                    .split('/')
-                                    .pop()}', '_blank')">📋 View</button>`
-                                : ''
-                            }
-                                <small style="color:var(--p-text-subdued); white-space:nowrap;">${new Date(
-                                e.node.updatedAt
-                            ).toLocaleString()}</small>
+                            <div style="padding:0 15px 14px;">
+                                <button class="fb-btn" style="width:100%; height:38px; font-size:12px; font-weight:600; background:var(--p-accent); color:#fff; border-radius:4px; display:flex; align-items:center; justify-content:center; gap:5px;" onclick="printShippingLabel('${e.node.id}', '${e.node.name}', '${shippingName}', '${shippingAddr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 6 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg> Print Label</button>
                             </div>
-                    </div>
-                </div>`;
+                        </div>`;
                     })
                     .join('');
             }
@@ -908,10 +938,12 @@
                                 isScanning = false;
                                 beep(false);
                                 vibrate(false);
-                                // Close scanner first, then show alert
+                                // Close scanner first, then show toast
                                 await closeScanner();
-                                alert(
-                                    `WRONG ITEM!\nYou should go to BIN #${bin}\n\nRequired: ${exp}\nScanned: ${decodedText}\n\nClick OK to scan again.`
+                                fbToast(
+                                    `Required: <b>${exp}</b><br>Scanned: <b>${decodedText}</b><br>Please go to BIN #${bin} and try again.`,
+                                    'warning',
+                                    'Wrong Item Scanned'
                                 );
                                 // Restart scanning after user dismisses alert
                                 startScan(id, exp, title, bin, sku);
@@ -922,7 +954,7 @@
                 )
                 .catch((err) => {
                     console.error(err);
-                    alert('Camera failed.');
+                    fbToast('Could not access camera. Please check permissions.', 'error', 'Camera Error');
                     closeScanner();
                 });
         }, 300);
@@ -968,7 +1000,7 @@
             }
 
             if (verifiedItemsForOrder.length === 0) {
-                alert('No verified items to fulfill.');
+                fbToast('Please scan at least one item before fulfilling.', 'warning', 'No Verified Items');
                 setLoader(false);
                 return;
             }
@@ -984,13 +1016,12 @@
             });
             const res = await r.json();
             if (res.success) {
-                // Use detailed message from API if available, otherwise use generic message
                 const successMessage =
                     res.message ||
                     (res.partiallyFulfilled
-                        ? 'Partial Fulfillment Successful!'
-                        : 'Order Fulfilled Successfully! Moving to History.');
-                alert(successMessage);
+                        ? 'Partial fulfillment complete.'
+                        : 'Order fulfilled successfully.');
+                fbToast(successMessage, 'success', res.partiallyFulfilled ? 'Partially Fulfilled' : 'Order Fulfilled', 5000);
 
                 // Set the fulfilled order as the last opened order so it stays open after refresh
                 lastOpenedOrderId = id;
@@ -1041,12 +1072,12 @@
                     setLoader(false);
                 }, 2500);
             } else {
-                alert('Fulfillment Error: ' + (res.error || 'Unknown error'));
+                fbToast(res.error || 'Something went wrong. Please try again.', 'error', 'Fulfillment Failed');
                 setLoader(false);
             }
         } catch (e) {
             console.error('Fulfillment Request Error:', e);
-            alert('Request failed. Please check connection.');
+            fbToast('Request failed. Please check your connection.', 'error', 'Connection Error');
             setLoader(false);
         }
         // We don't use finally { setLoader(false) } because loadOrders will handle it after the timeout
@@ -1085,8 +1116,8 @@
             localStorage.removeItem('fb_session_stable');
             localStorage.removeItem(STORAGE_KEY_VERIFIED);
             localStorage.removeItem(STORAGE_KEY_PRINTED);
-            alert('Session cleared! Please log in with your new credentials.');
-            location.reload();
+            fbToast('Session cleared. Please sign in with your new credentials.', 'info', 'Session Cleared', 3000);
+            setTimeout(() => location.reload(), 1500);
         }
     };
 
