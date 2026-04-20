@@ -16,7 +16,7 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
                 subtotalPriceSet { shopMoney { amount } }
                 totalTaxSet { shopMoney { amount } }
                 shippingLine { title originalPriceSet { shopMoney { amount } } }
-                shippingAddress { name address1 city zip provinceCode country }
+                shippingAddress { name company address1 address2 city zip provinceCode country }
                 lineItems(first: 10) {
                   edges {
                     node {
@@ -99,6 +99,16 @@ export async function getFulfilledFabricOrders(admin, cursor = null, direction =
                 updatedAt
                 displayFinancialStatus
                 totalPriceSet { shopMoney { amount currencyCode } }
+                shippingAddress {
+                  name
+                  company
+                  address1
+                  address2
+                  city
+                  zip
+                  provinceCode
+                  country
+                }
                 lineItems(first: 10) {
                   edges {
                     node {
