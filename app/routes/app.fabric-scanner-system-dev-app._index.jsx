@@ -37,7 +37,7 @@ export default function Index() {
           }}
         >
           <img
-            src="/app/fabric-scanner-system/fabric-logo.png"
+            src="/fabric-logo.png"
             alt="Fabric Scanner logo"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
@@ -77,7 +77,7 @@ export default function Index() {
               >
                 {showGif ? (
                   <img
-                    src="/app/fabric-scanner-system/scanner.gif"
+                    src="/scanner.gif"
                     alt="Scanning animation"
                     style={{ display: "block", width: "100%", height: "auto" }}
                     onError={() => setShowGif(false)}
@@ -116,7 +116,7 @@ export default function Index() {
               </div>
 
               <Box style={{ display: "flex", justifyContent: "center" }}>
-                <Button primary size="large" onClick={() => navigate("/app/fabric-scanner-system/home")}> 
+                <Button primary size="large" onClick={() => navigate("/app/fabric-scanner-system-dev-app/home")}> 
                   Get Started
                 </Button>
               </Box>
