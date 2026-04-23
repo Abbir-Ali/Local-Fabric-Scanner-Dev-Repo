@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "2d6b6b6e3120ef4ce721ef0cc8acc228"
-name = "fabric-scanner-dev-app-5"
+name = "fabric-scanner-dev-app"
 application_url = "https://example.com"
 embedded = true
 
