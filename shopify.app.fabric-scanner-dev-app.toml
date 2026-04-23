@@ -18,3 +18,8 @@ scopes = "read_inventory,read_locations,read_merchant_managed_fulfillment_orders
 
 [auth]
 redirect_urls = [ "https://example.com/api/auth" ]
+
+[app_proxy]
+url = "https://example.com/app/api/proxy"
+subpath = "fabric-scanner"
+prefix = "apps"
