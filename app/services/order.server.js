@@ -145,7 +145,7 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
     // For BIN searches, don't use sorting to ensure we get diverse products
     const activeSortKey = (query && !isBinSearch) ? "RELEVANCE" : (isBinSearch ? "ID" : sortKey);
     const activeReverse = (query && !isBinSearch) ? false : (isBinSearch ? false : reverse);
-    
+
     let finalQuery;
     if (isBinSearch) {
       // For BIN searches, fetch all swatch items (no text search) - we'll filter by BIN on server
@@ -153,8 +153,8 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
     } else {
       // For regular searches, use Shopify's search
       const escapedQuery = query.replace(/"/g, '\\"');
-      finalQuery = query 
-        ? `product_type:"Swatch Item" AND "${escapedQuery}"` 
+      finalQuery = query
+        ? `product_type:"Swatch Item" AND "${escapedQuery}"`
         : 'product_type:"Swatch Item"';
     }
 
@@ -226,28 +226,28 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
     }
 
     let edges = resJson.data?.products?.edges || [];
-    
+
     // Debug: Log metafields for first few products
     if (edges.length > 0) {
       console.log(`[DEBUG METAFIELDS] First product metafields:`, JSON.stringify(edges[0].node.metafields?.edges || [], null, 2));
     }
-    
+
     // Apply BIN filtering server-side if this is a BIN search
     if (isBinSearch && query) {
       const searchLower = query.toLowerCase();
       const beforeFilter = edges.length;
       console.log(`[BIN SEARCH DEBUG] Filtering ${beforeFilter} products for BIN: "${query}"`);
-      
+
       edges = edges.filter((edge) => {
         const metafields = edge.node.metafields?.edges || [];
-        const binMetafield = metafields.find(mf => mf.node.key === 'bin_number' && mf.node.namespace === 'custom');
+        const binMetafield = metafields.find(mf => mf.node.key === 'bin_locations' && mf.node.namespace === 'custom');
         const binValue = binMetafield?.node.value || '';
-        
+
         // Debug: Log all BIN values we encounter
         if (binValue) {
           console.log(`[BIN VALUE FOUND] Product "${edge.node.title}" has BIN: "${binValue}"`);
         }
-        
+
         const matches = binValue && binValue.toLowerCase().includes(searchLower);
         if (matches) {
           console.log(`[BIN MATCH] Query "${query}" matched BIN "${binValue}" for product ${edge.node.title}`);
@@ -255,13 +255,13 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
         return matches;
       });
       console.log(`[INVENTORY BIN FILTER] Server-side filtered from ${beforeFilter} to ${edges.length} items for BIN search: "${query}"`);
-      
+
       // If no matches found, log all available BIN values for debugging
       if (edges.length === 0) {
         console.log(`[BIN SEARCH DEBUG] No matches found for "${query}". Available BIN values in this batch:`);
         resJson.data?.products?.edges?.forEach(edge => {
           const metafields = edge.node.metafields?.edges || [];
-          const binMetafield = metafields.find(mf => mf.node.key === 'bin_number' && mf.node.namespace === 'custom');
+          const binMetafield = metafields.find(mf => mf.node.key === 'bin_locations' && mf.node.namespace === 'custom');
           if (binMetafield) {
             console.log(`  - "${binMetafield.node.value}" (${edge.node.title})`);
           }
@@ -271,9 +271,9 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
 
     console.log(`[INVENTORY SEARCH] Success: Found ${edges.length} products for query: "${finalQuery}"${isBinSearch ? ' (BIN filtered)' : ''}`);
     if (edges.length === 0 && !query) {
-       console.log("[INVENTORY SEARCH] WARNING: No products found with 'Swatch Item' type. Checking all products...");
+      console.log("[INVENTORY SEARCH] WARNING: No products found with 'Swatch Item' type. Checking all products...");
     }
-    
+
     return {
       edges: edges,
       pageInfo: resJson.data?.products?.pageInfo
@@ -460,7 +460,7 @@ export async function getAllFabricInventory(admin) {
       const resJson = await response.json();
       const products = resJson.data?.products?.edges || [];
       allProducts = allProducts.concat(products.map(p => {
-        const binMeta = p.node.metafields.edges.find(e => e.node.key === "bin_number")?.node;
+        const binMeta = p.node.metafields.edges.find(e => e.node.key === "bin_locations")?.node;
         return {
           title: p.node.title,
           sku: p.node.variants.edges[0]?.node?.sku || "N/A",
@@ -523,7 +523,7 @@ export async function getGlobalInventoryStats(admin, locationId) {
       products.forEach(p => {
         const variant = p.node.variants.edges[0]?.node;
         const available = variant?.inventoryItem?.inventoryLevel?.quantities[0]?.quantity || 0;
-        
+
         stats.total++;
         if (available <= 0) stats.outOfStock++;
         else if (available < 10) stats.lowStock++;

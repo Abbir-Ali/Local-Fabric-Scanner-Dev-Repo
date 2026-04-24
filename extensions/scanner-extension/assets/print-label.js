@@ -10,9 +10,9 @@
 
         const icons = {
             success: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-            error:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+            error: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
             warning: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-            info:    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+            info: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
         };
         const defaultTitles = { success: 'Success', error: 'Error', warning: 'Warning', info: 'Info' };
 
@@ -102,7 +102,7 @@
 
     const getBin = (node) => {
         if (!node || !node.metafields) return 'N/A';
-        const m = node.metafields.edges.find((x) => x.node.key === 'bin_number' && x.node.namespace === 'custom');
+        const m = node.metafields.edges.find((x) => x.node.key === 'bin_locations' && x.node.namespace === 'custom');
         return m ? m.node.value : 'N/A';
     };
 
@@ -347,11 +347,11 @@
                                     </div>
                                     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
                                         ${shopDomain
-                                        ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${orderId}', '_blank')">📋 View Order</button>`
-                                        : ''
-                                    }
+                                    ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${orderId}', '_blank')">📋 View Order</button>`
+                                    : ''
+                                }
                                         <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleDateString()}</div>
-                                        <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                                        <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                     </div>
                                 </div>
                                 <div style="padding:0 15px 14px;">
@@ -643,11 +643,11 @@
                         <div style="padding:12px 15px; background:#f9fafb; border-top: 1px solid #eee; display:flex; gap:8px;">
                             <button class="fb-btn" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; background:var(--p-accent); color:#fff; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0 10px; white-space:nowrap; overflow:hidden;" onclick="printShippingLabel('${o.id}', '${o.name}', '${shipName}', '${fullAddr}', true)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><polyline points="14 2 14 8 6 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Print Label</span></button>
                             ${allVerified
-                            ? `<button class="fb-btn fb-btn-success" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; padding:0 10px; white-space:nowrap; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:5px;" onclick="fulfillNow('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Fulfill Order</span></button>`
-                            : verifiedItems.size > 0 && fabrics.some((fx) => verifiedItems.has(fx.node.id))
-                                ? `<button class="fb-btn" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; background:#485b59; color:#fff; padding:0 10px; white-space:nowrap; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:5px;" onclick="fulfillNow('${o.id}', true)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M5 12h14M12 5l7 7-7 7"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Ship Verified (${fabrics.filter((fx) => verifiedItems.has(fx.node.id)).length})</span></button>`
-                                : ''
-                        }
+                        ? `<button class="fb-btn fb-btn-success" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; padding:0 10px; white-space:nowrap; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:5px;" onclick="fulfillNow('${o.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Fulfill Order</span></button>`
+                        : verifiedItems.size > 0 && fabrics.some((fx) => verifiedItems.has(fx.node.id))
+                            ? `<button class="fb-btn" style="flex:1; min-width:0; height:40px; font-size:12px; font-weight:600; background:#485b59; color:#fff; padding:0 10px; white-space:nowrap; overflow:hidden; display:inline-flex; align-items:center; justify-content:center; gap:5px;" onclick="fulfillNow('${o.id}', true)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M5 12h14M12 5l7 7-7 7"/></svg><span style="overflow:hidden; text-overflow:ellipsis;">Ship Verified (${fabrics.filter((fx) => verifiedItems.has(fx.node.id)).length})</span></button>`
+                            : ''
+                    }
                         </div>
                     </div>
                 </div>`;
@@ -881,11 +881,11 @@
                                 </div>
                                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
                                     ${shopDomain
-                                    ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${orderId}', '_blank')">📋 View Order</button>`
-                                    : ''
-                                }
+                                ? `<button class="fb-view-order-btn" onclick="window.open('https://admin.shopify.com/store/${shopDomain}/orders/${orderId}', '_blank')">📋 View Order</button>`
+                                : ''
+                            }
                                     <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleDateString()}</div>
-                                    <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                                    <div style="font-size:11px; color:var(--p-text-subdued); white-space:nowrap;">${new Date(e.node.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                 </div>
                             </div>
                             <div style="padding:0 15px 14px;">
