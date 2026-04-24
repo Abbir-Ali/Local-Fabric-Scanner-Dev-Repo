@@ -361,12 +361,12 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
   const orderUrl = `https://admin.shopify.com/store/${shopDomain}/orders/${orderId}`;
 
   return (
-    <div style={{ border: '2px solid #ff9900', borderRadius: '8px', overflow: 'hidden' }}>
+    <div style={{ border: '2px solid #C9A273', borderRadius: '8px', overflow: 'hidden' }}>
       <div 
         onClick={() => setOpen(!open)}
         style={{ 
           padding: '12px 16px', 
-          background: '#fff8e6', 
+          background: '#FAEBE1', 
           cursor: 'pointer',
           display: 'flex', 
           justifyContent: 'space-between',
@@ -406,7 +406,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
           <BlockStack gap="400">
              <Text variant="headingSm" as="h4">Fulfilled Items ({fulfilledItems.length})</Text>
              {fulfilledItems.map(({ node: item }, idx) => (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#f1f8f5', borderRadius: '4px' }}>
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#F1ECE5', borderRadius: '4px' }}>
                    <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
                    <div>
                       <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
@@ -428,7 +428,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
 
              <Text variant="headingSm" as="h4" tone="critical">Unfulfilled Items ({unfulfilledItems.length})</Text>
              {unfulfilledItems.map(({ node: item }, idx) => (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#fff4f4', borderRadius: '4px' }}>
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#FAF7F3', borderRadius: '4px' }}>
                    <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
                    <div>
                       <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
@@ -478,12 +478,12 @@ function OrderRow({ order, status, logs, index, shopDomain }) {
   const orderUrl = `https://admin.shopify.com/store/${shopDomain}/orders/${orderId}`;
 
   return (
-    <div style={{ border: '1px solid #dfe3e8', borderRadius: '8px', overflow: 'hidden' }}>
+    <div style={{ border: '1px solid #D8BFA4', borderRadius: '8px', overflow: 'hidden' }}>
       <div 
         onClick={() => setOpen(!open)}
         style={{ 
           padding: '12px 16px', 
-          background: '#f9fafb', 
+          background: '#FAF7F3', 
           cursor: 'pointer',
           display: 'flex', 
           justifyContent: 'space-between',

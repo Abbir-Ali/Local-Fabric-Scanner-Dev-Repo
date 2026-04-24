@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import { getFabricInventory, getFabricOrders, getFulfilledFabricOrders, getPartiallyFulfilledOrders } from "../services/order.server";
 import { validateAdminAuth, validateStaffAuth } from "../models/settings.server";
 import { createScanLog } from "../models/logs.server";
+import { getBinLocations } from "../models/binLocations.server";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.public.appProxy(request);
@@ -141,6 +142,7 @@ export const loader = async ({ request }) => {
 
       case "settings": {
         const settings = await import("../models/settings.server").then(m => m.getAppSettings(shop));
+        const binLocations = await getBinLocations(shop);
         return json({ 
           data: { 
             brandLogo: settings.brandLogo,
@@ -151,7 +153,8 @@ export const loader = async ({ request }) => {
             enableInventorySearch: settings.enableInventorySearch,
             enableInventorySort: settings.enableInventorySort,
             showStaffManagement: settings.showStaffManagement,
-            showLogoutButton: settings.showLogoutButton
+            showLogoutButton: settings.showLogoutButton,
+            binLocations,
           } 
         });
       }

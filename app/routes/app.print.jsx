@@ -34,7 +34,7 @@ export default function PrintLabels() {
           padding: 10px;
         }
         .label-card { 
-          border: 1px dashed #ccc; 
+          border: 1px dashed #D8BFA4; 
           padding: 20px; 
           text-align: center; 
           page-break-inside: avoid;
@@ -44,7 +44,7 @@ export default function PrintLabels() {
         }
       `}} />
 
-      <div className="no-print" style={{ padding: "10px", background: "#EAEAEA", textAlign: "center" }}>
+      <div className="no-print" style={{ padding: "10px", background: "#F1ECE5", textAlign: "center", borderBottom: "1px solid #D8BFA4" }}>
         <p>Preparing Print Dialog... If it doesn't open, click the button below.</p>
         <button onClick={() => window.print()}>Manual Print</button>
       </div>
@@ -61,7 +61,7 @@ export default function PrintLabels() {
                 {product.title}
               </div>
               <BarcodeImage value={barcode} />
-              <div style={{ fontSize: "12px", marginTop: "8px", color: "#666" }}>
+              <div style={{ fontSize: "12px", marginTop: "8px", color: "#945528" }}>
                 STOCK: {product.totalInventory}
               </div>
             </div>

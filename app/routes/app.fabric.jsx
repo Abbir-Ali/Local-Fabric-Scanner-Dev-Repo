@@ -1,14 +1,16 @@
 import { useLoaderData, useFetcher, useNavigate, useSearchParams, useNavigation } from "@remix-run/react";
+import { createPortal } from "react-dom";
 import { authenticate } from "../shopify.server";
 import {
   Page, Layout, Card, IndexTable, Button, BlockStack, Badge,
   InlineStack, Thumbnail, Text, Pagination, Box, IndexFilters, TextField, Select, useSetIndexFiltersMode,
-  Popover, Banner, Spinner, Grid, Modal
+  Popover, Banner, Grid, Modal, Tabs, Icon
 } from "@shopify/polaris";
-import { ArrowRightIcon, EditIcon, CheckIcon, XIcon, ExportIcon } from "@shopify/polaris-icons";
+import { ArrowRightIcon, EditIcon, ExportIcon, SearchIcon, PlusIcon, DeleteIcon, LocationIcon } from "@shopify/polaris-icons";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getFabricInventory, getShopLocations, getAllFabricInventory, getGlobalInventoryStats } from "../services/order.server";
 import { adjustInventory, setInventory } from "../services/inventory.server";
+import { getBinLocations, importBinLocations, addManualBinLocation, deleteBinLocation, clearAllBinLocations } from "../models/binLocations.server";
 
 import BarcodeImage from "../components/BarcodeImage";
 
@@ -46,6 +48,7 @@ export const loader = async ({ request }) => {
   const globalStats = await getGlobalInventoryStats(admin, locationId);
 
   const shopDomain = session.shop.replace(".myshopify.com", "");
+  const binLocations = await getBinLocations(session.shop);
 
   return {
     products: edges,
@@ -58,20 +61,22 @@ export const loader = async ({ request }) => {
     initialSort: sortKey,
     initialReverse: reverse,
     globalStats,
-    isBinSearch
+    isBinSearch,
+    binLocations,
   };
 };
 
 /**
  * ACTION
- * Handles inventory adjustments, bulk updates, and CSV imports.
+ * Handles inventory adjustments, bulk updates, bin location management.
  */
 export const action = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
   const formData = await request.formData();
 
   const actionType = formData.get("actionType");
-  console.log(`[ACTION] Received action: ${actionType}`, Object.fromEntries(formData.entries()));
+  console.log(`[ACTION] Received action: ${actionType}`);
 
   if (actionType === "updateBin") {
     const productId = formData.get("productId");
@@ -94,9 +99,7 @@ export const action = async ({ request }) => {
             userErrors { field message }
           }
         }`,
-        {
-          variables: { ownerId: productId, value: binValue || "" }
-        }
+        { variables: { ownerId: productId, value: binValue || "" } }
       );
 
       const resData = await response.json();
@@ -108,11 +111,32 @@ export const action = async ({ request }) => {
     }
   }
 
-  if (actionType === "uploadBinLocationsFile") {
-    // File has already been parsed and stored in localStorage on the client
-    // Server just needs to acknowledge the upload was processed
-    console.log("[ACTION] Bin locations file processed successfully");
-    return { success: true, message: "Bin locations imported successfully" };
+  if (actionType === "importBinLocations") {
+    const locationsJson = formData.get("locations");
+    try {
+      const locations = JSON.parse(locationsJson || "[]");
+      const result = await importBinLocations(shop, locations);
+      return { success: true, actionType, ...result };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  if (actionType === "addManualBinLocation") {
+    const location = formData.get("location");
+    const result = await addManualBinLocation(shop, location);
+    return { ...result, actionType };
+  }
+
+  if (actionType === "deleteBinLocation") {
+    const location = formData.get("location");
+    await deleteBinLocation(shop, location);
+    return { success: true, actionType, deleted: location };
+  }
+
+  if (actionType === "clearAllBinLocations") {
+    await clearAllBinLocations(shop);
+    return { success: true, actionType };
   }
 
   if (actionType === "adjustInventory") {
@@ -134,8 +158,6 @@ export const action = async ({ request }) => {
     const locationId = formData.get("locationId");
     const quantity = formData.get("quantity");
 
-    console.log(`[ACTION] Setting Inventory: Item=${inventoryItemId}, Location=${locationId}, Qty=${quantity}`);
-
     try {
       await setInventory(admin, inventoryItemId, locationId, quantity);
       return { success: true, message: "Inventory set successfully" };
@@ -144,7 +166,6 @@ export const action = async ({ request }) => {
       return { success: false, error: error.message };
     }
   }
-
 
   if (actionType === "exportAllBarcodes") {
     try {
@@ -163,7 +184,7 @@ export const action = async ({ request }) => {
  * Main page component.
  */
 export default function FabricInventory() {
-  const { products: rawProducts, pageInfo, page, shopDomain, locations, currentLocationId, initialQuery, initialSort, initialReverse, globalStats: initialGlobalStats, isBinSearch: initialIsBinSearch } = useLoaderData();
+  const { products: rawProducts, pageInfo, page, shopDomain, locations, currentLocationId, initialQuery, initialSort, initialReverse, globalStats: initialGlobalStats, isBinSearch: initialIsBinSearch, binLocations: serverBinLocations } = useLoaderData();
   const products = rawProducts || [];
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -174,6 +195,15 @@ export default function FabricInventory() {
   const stats = initialGlobalStats || { total: 0, lowStock: 0, outOfStock: 0 };
   const isBinSearch = initialIsBinSearch || false;
 
+  // Bin locations come from the server (DB) — always in sync across all admin users
+  const [binLocations, setBinLocations] = useState(serverBinLocations || []);
+  const [importModalActive, setImportModalActive] = useState(false);
+  const [importFeedback, setImportFeedback] = useState(null); // { type: 'success'|'error', message }
+
+  // Keep local state in sync when loader refreshes
+  useEffect(() => {
+    setBinLocations(serverBinLocations || []);
+  }, [serverBinLocations]);
 
   const locationOptions = useMemo(() => {
     if (!locations || locations.length === 0) return [{ label: "No locations found", value: "" }];
@@ -191,26 +221,10 @@ export default function FabricInventory() {
 
   const [sortSelected, setSortSelected] = useState([`${initialSort} ${initialReverse ? 'desc' : 'asc'}`]);
   const [queryValue, setQueryValue] = useState(initialQuery || "");
-  const [binLocations, setBinLocations] = useState([]);
-  const [importModalActive, setImportModalActive] = useState(false);
-  const [importError, setImportError] = useState(null);
-  const [importSuccess, setImportSuccess] = useState(false);
 
   useEffect(() => {
     setQueryValue(initialQuery || "");
   }, [initialQuery]);
-
-  // Load bin locations from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem("binLocations");
-    if (saved) {
-      try {
-        setBinLocations(JSON.parse(saved));
-      } catch (err) {
-        console.error("Error loading bin locations:", err);
-      }
-    }
-  }, []);
 
   const handleQueryChange = useCallback((value) => setQueryValue(value), []);
 
@@ -276,53 +290,40 @@ export default function FabricInventory() {
     navigate(`?${params.toString()}`);
   };
 
-  const handleImportBinLocations = async (file) => {
-    setImportError(null);
-    setImportSuccess(false);
+  const handleImportBinLocations = useCallback((locations) => {
+    fetcher.submit(
+      { actionType: "importBinLocations", locations: JSON.stringify(locations) },
+      { method: "post" }
+    );
+  }, [fetcher]);
 
-    try {
-      // Validate file size
-      const maxSizeMB = 5;
-      if (file.size > maxSizeMB * 1024 * 1024) {
-        throw new Error(`File size exceeds ${maxSizeMB}MB limit`);
-      }
+  const handleClearBinLocations = useCallback(() => {
+    if (window.confirm(`Clear all ${binLocations.length} bin locations? This cannot be undone.`)) {
+      fetcher.submit({ actionType: "clearAllBinLocations" }, { method: "post" });
+    }
+  }, [fetcher, binLocations.length]);
 
-      // Read file
-      const fileContent = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(new Error("Failed to read file"));
-        reader.readAsText(file);
-      });
-
-      // Import parser
-      const { parseBinLocations } = await import("../utils/binLocationParser");
-
-      // Parse locations
-      const locations = await parseBinLocations(file.type, fileContent);
-
-      // Save to localStorage and state
-      setBinLocations(locations);
-      localStorage.setItem("binLocations", JSON.stringify(locations));
-
-      setImportSuccess(true);
+  // Handle fetcher responses for bin location actions
+  useEffect(() => {
+    if (!fetcher.data) return;
+    const d = fetcher.data;
+    if (d.actionType === "importBinLocations" && d.success) {
+      setImportFeedback({ type: "success", message: `Import complete — ${d.added} added, ${d.duplicates} duplicates skipped. ${d.total} total locations.` });
       setImportModalActive(false);
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setImportSuccess(false), 3000);
-    } catch (error) {
-      console.error("Import error:", error);
-      setImportError(error.message || "Failed to import bin locations");
+      navigate(".", { replace: true }); // refresh loader
     }
-  };
-
-  const handleClearBinLocations = () => {
-    if (window.confirm("Are you sure you want to clear all bin locations? This cannot be undone.")) {
-      setBinLocations([]);
-      localStorage.removeItem("binLocations");
-      setImportSuccess(false);
+    if (d.actionType === "addManualBinLocation") {
+      if (d.success) {
+        navigate(".", { replace: true });
+      }
     }
-  };
+    if (d.actionType === "deleteBinLocation" && d.success) {
+      navigate(".", { replace: true });
+    }
+    if (d.actionType === "clearAllBinLocations" && d.success) {
+      navigate(".", { replace: true });
+    }
+  }, [fetcher.data, navigate]);
 
   const handlePrint = (barcode, title, sku, binNumber) => {
     const printWindow = window.open('', '_blank', 'width=600,height=400');
@@ -629,7 +630,7 @@ export default function FabricInventory() {
       title="Swatch Item Inventory"
       fullWidth
       primaryAction={{
-        content: 'Import Bin Locations',
+        content: 'Manage Bin Locations',
         onAction: () => setImportModalActive(true),
       }}
       secondaryActions={[
@@ -639,73 +640,66 @@ export default function FabricInventory() {
           onAction: () => fetcher.submit({ actionType: "exportAllBarcodes" }, { method: "post" }),
           loading: fetcher.state === "submitting" && fetcher.formData?.get("actionType") === "exportAllBarcodes"
         },
-        binLocations.length > 0 && {
-          content: `Clear ${binLocations.length} Locations`,
-          onAction: handleClearBinLocations,
-        }
       ].filter(Boolean)}
     >
       <Layout>
-        <BinLocationImportModal
+        <BinLocationModal
           active={importModalActive}
           onClose={() => setImportModalActive(false)}
           onImport={handleImportBinLocations}
-          error={importError}
-          success={importSuccess}
-          isLoading={false}
-          binCount={binLocations.length}
+          onClear={handleClearBinLocations}
+          binLocations={binLocations}
+          fetcher={fetcher}
         />
 
-        {importSuccess && (
+        {importFeedback && (
           <Layout.Section>
-            <Banner tone="success" title="Import Successful" onDismiss={() => setImportSuccess(false)}>
-              <p>{binLocations.length} bin locations loaded successfully!</p>
-            </Banner>
-          </Layout.Section>
-        )}
-
-        {importError && (
-          <Layout.Section>
-            <Banner tone="critical" title="Import Error" onDismiss={() => setImportError(null)}>
-              <p>{importError}</p>
+            <Banner
+              tone={importFeedback.type === "success" ? "success" : "critical"}
+              onDismiss={() => setImportFeedback(null)}
+            >
+              <p>{importFeedback.message}</p>
             </Banner>
           </Layout.Section>
         )}
 
         {binLocations.length > 0 && (
           <Layout.Section>
-            <Card>
-              <BlockStack gap="200">
-                <InlineStack gap="200" align="center">
-                  <Text variant="bodySm" tone="subdued" fontWeight="medium">
-                    ✓ {binLocations.length} bin locations loaded
-                  </Text>
-                  <Button size="slim" variant="tertiary" onClick={() => setImportModalActive(true)}>
-                    Update
-                  </Button>
-                </InlineStack>
-              </BlockStack>
-            </Card>
+            <div style={{
+              background: "#F1ECE5",
+              border: "1px solid #C9A273",
+              borderRadius: "var(--p-border-radius-300)",
+              padding: "10px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}>
+              <InlineStack gap="200" align="center" blockAlign="center">
+                <div style={{ color: "#C9A273", display: "flex" }}>
+                  <Icon source={LocationIcon} />
+                </div>
+                <Text variant="bodySm" fontWeight="semibold">
+                  {binLocations.length} bin locations loaded
+                </Text>
+                <span style={{
+                  background: "#EAAF7E",
+                  color: "#945528",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  padding: "2px 8px",
+                  borderRadius: "20px",
+                  letterSpacing: "0.3px",
+                }}>Active</span>
+              </InlineStack>
+              <Button size="slim" variant="tertiary" onClick={() => setImportModalActive(true)}>
+                Manage
+              </Button>
+            </div>
           </Layout.Section>
         )}
 
-        {fetcher.data?.message && (
-          <Layout.Section>
-            <Banner tone="success" onDismiss={() => fetcher.data.message = null}>
-              <p>{fetcher.data.message}</p>
-            </Banner>
-          </Layout.Section>
-        )}
-
-        {fetcher.data?.error && (
-          <Layout.Section>
-            <Banner tone="critical" onDismiss={() => fetcher.data.error = null}>
-              <p>{fetcher.data.error}</p>
-            </Banner>
-          </Layout.Section>
-        )}
-
-        <Layout.Section>
+<Layout.Section>
           <Grid columns={{ xs: 1, sm: 1, md: 3, lg: 3, xl: 3 }} gap={{ xs: '400', md: '400' }}>
             <Grid.Cell columnSpan={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}>
               <Card>
@@ -893,229 +887,371 @@ function InventoryAdjuster({ inventoryItemId, locationId }) {
 
 
 /**
- * HELPER: BinLocationImportModal
- * Modal for importing bin locations from file
+ * HELPER: BinLocationModal
+ * Tabbed modal: Import from file | Add manually | Manage existing
  */
-function BinLocationImportModal({ active, onClose, onImport, error, success, isLoading, binCount }) {
+function BinLocationModal({ active, onClose, onImport, onClear, binLocations, fetcher }) {
+  const [selectedTab, setSelectedTab] = useState(0);
   const [file, setFile] = useState(null);
   const [previewLocations, setPreviewLocations] = useState([]);
-  const [showPreview, setShowPreview] = useState(false);
   const [fileProcessing, setFileProcessing] = useState(false);
+  const [fileError, setFileError] = useState(null);
+  const [manualValue, setManualValue] = useState("");
+  const [manualError, setManualError] = useState(null);
+  const [searchManage, setSearchManage] = useState("");
   const fileInputRef = useRef(null);
 
+  const isSubmitting = fetcher.state === "submitting";
+
+  const tabs = [
+    { id: "import", content: "Import File" },
+    { id: "manual", content: "Add Manually" },
+    { id: "manage", content: `Manage (${binLocations.length})` },
+  ];
+
+  // --- File tab ---
   const handleFileSelect = async (e) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
-
+    setFileError(null);
     setFileProcessing(true);
     setFile(selectedFile);
-
     try {
       const fileContent = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(new Error("Failed to read file"));
+        reader.onload = (ev) => resolve(ev.target.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsText(selectedFile);
       });
-
       const { parseBinLocations } = await import("../utils/binLocationParser");
       const locations = await parseBinLocations(selectedFile.type, fileContent);
-      setPreviewLocations(locations.slice(0, 50));
-      setShowPreview(true);
+      setPreviewLocations(locations);
     } catch (err) {
-      console.error("Error reading file:", err);
+      setFileError(err.message || "Failed to parse file");
+      setFile(null);
+      setPreviewLocations([]);
     } finally {
       setFileProcessing(false);
     }
   };
 
-  const handleImport = () => {
-    if (file) {
-      onImport(file);
+  const handleFileImport = () => {
+    if (previewLocations.length > 0) {
+      onImport(previewLocations);
     }
   };
 
-  const handleReset = () => {
+  const handleFileReset = () => {
     setFile(null);
     setPreviewLocations([]);
-    setShowPreview(false);
+    setFileError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // --- Manual tab ---
+  const handleAddManual = () => {
+    const val = manualValue.trim();
+    if (!val) { setManualError("Please enter a bin location."); return; }
+    setManualError(null);
+    fetcher.submit({ actionType: "addManualBinLocation", location: val }, { method: "post" });
+    setManualValue("");
+  };
+
+  // Watch for manual add errors from server
+  useEffect(() => {
+    if (fetcher.data?.actionType === "addManualBinLocation" && !fetcher.data?.success) {
+      setManualError(fetcher.data.error);
+    }
+  }, [fetcher.data]);
+
+  // --- Manage tab ---
+  const filteredManage = useMemo(() => {
+    if (!searchManage) return binLocations;
+    return binLocations.filter(l => l.toLowerCase().includes(searchManage.toLowerCase()));
+  }, [binLocations, searchManage]);
+
+  const handleDelete = (location) => {
+    fetcher.submit({ actionType: "deleteBinLocation", location }, { method: "post" });
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm(`Delete all ${binLocations.length} bin locations? This cannot be undone.`)) {
+      onClear();
+    }
   };
 
   return (
     <Modal
       open={active}
       onClose={onClose}
-      title="📁 Import Bin Locations"
+      title="Bin Location Manager"
       size="large"
-      primaryAction={{
-        content: isLoading ? "Importing..." : "Import",
-        onAction: handleImport,
-        loading: isLoading,
-        disabled: !file || previewLocations.length === 0 || isLoading || fileProcessing,
-      }}
-      secondaryActions={[
-        {
-          content: "Cancel",
-          onAction: onClose,
-        },
-      ]}
     >
-      <Modal.Section>
-        <BlockStack gap="600">
-          {error && (
-            <Banner tone="critical" title="❌ Import Failed">
-              <p>{error}</p>
-              <Text variant="bodySm" tone="subdued" as="p">
-                Please check your file format and try again.
-              </Text>
-            </Banner>
-          )}
+      <div style={{ borderBottom: "1px solid var(--p-color-border)" }}>
+        <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab} fitted />
+      </div>
 
-          {success && (
-            <Banner tone="success" title="✅ Success">
-              <p>Bin locations imported successfully!</p>
-            </Banner>
-          )}
+      {/* ── Import File Tab ── */}
+      {selectedTab === 0 && (
+        <Modal.Section>
+          <BlockStack gap="500">
+            {fileError && (
+              <Banner tone="critical" onDismiss={() => setFileError(null)}>
+                <p>{fileError}</p>
+              </Banner>
+            )}
 
-          <Card>
-            <BlockStack gap="400">
-              <BlockStack gap="200">
-                <Text variant="headingMd" as="h3">Step 1: Select Your File</Text>
+            {/* Drop zone */}
+            <div
+              onClick={() => !fileProcessing && fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${file ? "#C9A273" : "var(--p-color-border)"}`,
+                borderRadius: "var(--p-border-radius-300)",
+                background: file ? "#F1ECE5" : "#FAF7F3",
+                padding: "32px 24px",
+                textAlign: "center",
+                cursor: fileProcessing ? "wait" : "pointer",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <BlockStack gap="200" align="center">
+                <div style={{ fontSize: "36px", lineHeight: 1 }}>{file ? "✅" : "📂"}</div>
+                <Text variant="headingSm" fontWeight="semibold">
+                  {file ? file.name : "Click to select a file"}
+                </Text>
+                {!file && <Text variant="bodySm" tone="subdued">CSV or TXT · Max 5MB</Text>}
+                {file && (
+                  <Text variant="bodySm" tone="subdued">
+                    {(file.size / 1024).toFixed(1)} KB · {previewLocations.length} locations found
+                  </Text>
+                )}
+              </BlockStack>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.txt"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+              disabled={isSubmitting || fileProcessing}
+            />
+
+            {file && (
+              <Button size="slim" variant="tertiary" onClick={handleFileReset} disabled={isSubmitting}>
+                Choose a different file
+              </Button>
+            )}
+
+            {/* Preview grid */}
+            {previewLocations.length > 0 && (
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text variant="headingXs" fontWeight="semibold">Preview ({previewLocations.length} locations)</Text>
+                  <Badge tone="info">Duplicates will be skipped</Badge>
+                </InlineStack>
+                <div style={{
+                  maxHeight: "220px",
+                  overflowY: "auto",
+                  border: "1px solid #D8BFA4",
+                  borderRadius: "var(--p-border-radius-200)",
+                  background: "#FAF7F3",
+                  padding: "12px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))",
+                  gap: "6px",
+                }}>
+                  {previewLocations.map((loc, i) => (
+                    <div key={i} style={{
+                      background: "var(--p-color-bg-surface)",
+                      border: "1px solid var(--p-color-border)",
+                      borderRadius: "var(--p-border-radius-150)",
+                      padding: "6px 8px",
+                      textAlign: "center",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                    }}>
+                      {loc}
+                    </div>
+                  ))}
+                </div>
+              </BlockStack>
+            )}
+
+            {/* Supported formats hint */}
+            <div style={{
+              background: "#F1ECE5",
+              borderRadius: "var(--p-border-radius-200)",
+              padding: "12px 16px",
+            }}>
+              <BlockStack gap="100">
+                <Text variant="bodyXs" fontWeight="semibold" tone="subdued">SUPPORTED FORMATS</Text>
                 <Text variant="bodySm" tone="subdued">
-                  Supports CSV and TXT formats. Maximum 5MB.
-                  {binCount > 0 && <> You have {binCount} locations loaded.</>}
+                  One per line · Comma-separated · Space-separated · Semicolon-separated
+                </Text>
+                <Text variant="bodySm" tone="subdued" fontFamily="mono">
+                  A1:1, A1:2, A1:3 &nbsp;·&nbsp; A1:1 A1:2 A1:3 &nbsp;·&nbsp; A1:1{"\n"}A1:2
                 </Text>
               </BlockStack>
+            </div>
 
-              <Box
-                borderWidth="2"
-                borderRadius="300"
-                borderColor={file ? "border-success" : "border"}
-                borderStyle="dashed"
-                padding="600"
-                background={file ? "bg-fill-success-secondary" : "bg-fill-tertiary"}
-                style={{
-                  cursor: fileProcessing ? "wait" : "pointer",
-                  transition: "all 0.3s ease",
-                  textAlign: "center",
-                }}
-                onClick={() => !fileProcessing && fileInputRef.current?.click()}
-              >
+            <Button
+              variant="primary"
+              onClick={handleFileImport}
+              loading={isSubmitting && fetcher.formData?.get("actionType") === "importBinLocations"}
+              disabled={!file || previewLocations.length === 0 || fileProcessing || isSubmitting}
+              fullWidth
+            >
+              Import {previewLocations.length > 0 ? `${previewLocations.length} Locations` : ""}
+            </Button>
+          </BlockStack>
+        </Modal.Section>
+      )}
+
+      {/* ── Manual Add Tab ── */}
+      {selectedTab === 1 && (
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Text variant="bodySm" tone="subdued">
+              Add individual bin locations one at a time. These are saved to the database and visible to all admin users.
+            </Text>
+
+            <InlineStack gap="200" blockAlign="end">
+              <div style={{ flex: 1 }}>
+                <TextField
+                  label="Bin Location"
+                  value={manualValue}
+                  onChange={(v) => { setManualValue(v); setManualError(null); }}
+                  placeholder="e.g. A1:3"
+                  autoComplete="off"
+                  error={manualError}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddManual(); }}
+                />
+              </div>
+              <div style={{ paddingBottom: manualError ? "22px" : "0" }}>
+                <Button
+                  variant="primary"
+                  icon={PlusIcon}
+                  onClick={handleAddManual}
+                  loading={isSubmitting && fetcher.formData?.get("actionType") === "addManualBinLocation"}
+                  disabled={!manualValue.trim() || isSubmitting}
+                >
+                  Add
+                </Button>
+              </div>
+            </InlineStack>
+
+            {binLocations.length > 0 && (
+              <BlockStack gap="200">
+                <Text variant="headingXs" tone="subdued">Recently added</Text>
+                <div style={{
+                  maxHeight: "280px",
+                  overflowY: "auto",
+                  border: "1px solid var(--p-color-border)",
+                  borderRadius: "var(--p-border-radius-200)",
+                }}>
+                  {[...binLocations].reverse().slice(0, 20).map((loc, i) => (
+                    <div key={i} style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 14px",
+                      borderBottom: i < Math.min(binLocations.length, 20) - 1 ? "1px solid var(--p-color-border-subdued)" : "none",
+                    }}>
+                      <Text variant="bodySm" fontFamily="mono">{loc}</Text>
+                      <Button
+                        icon={DeleteIcon}
+                        variant="plain"
+                        tone="critical"
+                        size="micro"
+                        onClick={() => handleDelete(loc)}
+                        accessibilityLabel={`Delete ${loc}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </BlockStack>
+            )}
+          </BlockStack>
+        </Modal.Section>
+      )}
+
+      {/* ── Manage Tab ── */}
+      {selectedTab === 2 && (
+        <Modal.Section>
+          <BlockStack gap="400">
+            {binLocations.length === 0 ? (
+              <Box padding="800" style={{ textAlign: "center" }}>
                 <BlockStack gap="200" align="center">
-                  <div style={{ fontSize: "32px" }}>
-                    {file ? "✓" : "📤"}
-                  </div>
-                  <BlockStack gap="100">
-                    <Text variant="headingSm" fontWeight="bold">
-                      {file ? file.name : "Drop your file here"}
-                    </Text>
-                    {!file && (
-                      <Text variant="bodySm" tone="subdued">
-                        or click to browse
-                      </Text>
-                    )}
-                    {file && (
-                      <Text variant="bodySm" tone="subdued">
-                        {(file.size / 1024).toFixed(2)} KB • {previewLocations.length} locations
-                      </Text>
-                    )}
-                  </BlockStack>
+                  <Text variant="headingSm" tone="subdued">No bin locations yet</Text>
+                  <Text variant="bodySm" tone="subdued">Import a file or add locations manually.</Text>
                 </BlockStack>
               </Box>
+            ) : (
+              <>
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text variant="headingXs" tone="subdued">{binLocations.length} total locations</Text>
+                  <Button
+                    variant="plain"
+                    tone="critical"
+                    size="slim"
+                    icon={DeleteIcon}
+                    onClick={handleClearAll}
+                    disabled={isSubmitting}
+                  >
+                    Clear All
+                  </Button>
+                </InlineStack>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.txt"
-                onChange={handleFileSelect}
-                style={{ display: "none" }}
-                disabled={isLoading || fileProcessing}
-              />
+                <TextField
+                  label="Search locations"
+                  labelHidden
+                  placeholder="Search..."
+                  value={searchManage}
+                  onChange={setSearchManage}
+                  prefix={<Icon source={SearchIcon} />}
+                  clearButton
+                  onClearButtonClick={() => setSearchManage("")}
+                  autoComplete="off"
+                />
 
-              {file && (
-                <Button
-                  fullWidth
-                  size="slim"
-                  variant="tertiary"
-                  onClick={handleReset}
-                  disabled={isLoading || fileProcessing}
-                >
-                  Choose Different File
-                </Button>
-              )}
-            </BlockStack>
-          </Card>
-
-          {showPreview && previewLocations.length > 0 && (
-            <Card>
-              <BlockStack gap="300">
-                <BlockStack gap="100">
-                  <InlineStack align="space-between">
-                    <Text variant="headingMd" as="h3">Step 2: Preview</Text>
-                    <Badge tone="info">{previewLocations.length}+ locations</Badge>
-                  </InlineStack>
-                  <Text variant="bodySm" tone="subdued">
-                    Here's a preview of the first {previewLocations.length} bin locations
-                  </Text>
-                </BlockStack>
-
-                <Box
-                  style={{
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                    border: "1px solid var(--p-color-border)",
-                    borderRadius: "8px",
-                    background: "var(--p-color-bg-surface-secondary)",
-                  }}
-                >
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "8px", padding: "12px" }}>
-                    {previewLocations.map((location, idx) => (
-                      <Box
-                        key={idx}
-                        padding="200"
-                        background="bg-surface"
-                        borderRadius="150"
-                        style={{ textAlign: "center", border: "1px solid var(--p-color-border)" }}
-                      >
-                        <Text variant="bodySm" fontWeight="medium" fontFamily="mono">
-                          {location}
-                        </Text>
-                      </Box>
-                    ))}
-                  </div>
-                </Box>
-              </BlockStack>
-            </Card>
-          )}
-
-          <Card background="bg-fill-quaternary">
-            <BlockStack gap="300">
-              <Text variant="headingXs" as="h4">📝 Supported Formats</Text>
-              <BlockStack gap="200">
-                <div>
-                  <Text variant="bodySm" fontWeight="bold">Newline separated:</Text>
-                  <Text variant="bodySm" tone="subdued" fontFamily="mono">
-                    A1:1<br />A1:2<br />A1:3
-                  </Text>
+                <div style={{
+                  maxHeight: "340px",
+                  overflowY: "auto",
+                  border: "1px solid var(--p-color-border)",
+                  borderRadius: "var(--p-border-radius-200)",
+                }}>
+                  {filteredManage.length === 0 ? (
+                    <Box padding="400" style={{ textAlign: "center" }}>
+                      <Text variant="bodySm" tone="subdued">No locations match your search.</Text>
+                    </Box>
+                  ) : (
+                    filteredManage.map((loc, i) => (
+                      <div key={i} style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        borderBottom: i < filteredManage.length - 1 ? "1px solid var(--p-color-border-subdued)" : "none",
+                        background: i % 2 === 0 ? "transparent" : "#FAF7F3",
+                      }}>
+                        <Text variant="bodySm" fontFamily="mono">{loc}</Text>
+                        <Button
+                          icon={DeleteIcon}
+                          variant="plain"
+                          tone="critical"
+                          size="micro"
+                          onClick={() => handleDelete(loc)}
+                          accessibilityLabel={`Delete ${loc}`}
+                        />
+                      </div>
+                    ))
+                  )}
                 </div>
-                <div>
-                  <Text variant="bodySm" fontWeight="bold">Space separated:</Text>
-                  <Text variant="bodySm" tone="subdued" fontFamily="mono">
-                    A1:1 A1:2 A1:3 A1:4
-                  </Text>
-                </div>
-                <div>
-                  <Text variant="bodySm" fontWeight="bold">Comma separated:</Text>
-                  <Text variant="bodySm" tone="subdued" fontFamily="mono">
-                    A1:1,A1:2,A1:3
-                  </Text>
-                </div>
-              </BlockStack>
-            </BlockStack>
-          </Card>
-        </BlockStack>
-      </Modal.Section>
+              </>
+            )}
+          </BlockStack>
+        </Modal.Section>
+      )}
     </Modal>
   );
 }
@@ -1123,238 +1259,287 @@ function BinLocationImportModal({ active, onClose, onImport, error, success, isL
 
 /**
  * HELPER: BinEditor
- * Enhanced dropdown with search and beautiful UI
+ * Renders the picker panel via a React portal so it sits outside the
+ * IndexTable DOM — this is the only reliable way to avoid Polaris table
+ * row event interception swallowing clicks inside the picker.
  */
 function BinEditor({ productId, initialBin, binLocations = [] }) {
   const fetcher = useFetcher();
   const [bin, setBin] = useState(initialBin);
-  const [tempBin, setTempBin] = useState(initialBin);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedBin, setSelectedBin] = useState(null); // null = nothing chosen yet in this session
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const containerRef = useRef(null);
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef(null);
+  const searchRef = useRef(null);
+  const [portalRoot, setPortalRoot] = useState(null);
+
+  // Portal root — document.body, resolved client-side only
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
 
   useEffect(() => {
     setBin(initialBin);
-    setTempBin(initialBin);
   }, [initialBin]);
 
   useEffect(() => {
     if (fetcher.data?.success && fetcher.data?.field === "bin") {
       setBin(fetcher.data.updatedValue);
-      setIsEditing(false);
+      setIsOpen(false);
+      setSelectedBin(null);
       setSearchValue("");
-      setShowSuggestions(false);
-      setHighlightedIndex(-1);
     }
   }, [fetcher.data]);
 
-  // Filter suggestions based on search value
+  // Position the panel below the button
+  const openPicker = (e) => {
+    e.stopPropagation();
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPanelPos({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+      });
+    }
+    setSelectedBin(null);
+    setSearchValue("");
+    setHighlightedIndex(-1);
+    setIsOpen(true);
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      // If click is on the button itself, ignore (openPicker handles toggle)
+      if (buttonRef.current?.contains(e.target)) return;
+      // If click is inside the portal panel, ignore
+      const panel = document.getElementById("bin-editor-portal-panel");
+      if (panel?.contains(e.target)) return;
+      closePicker();
+    };
+    // Use capture phase so we get it before Polaris
+    document.addEventListener("mousedown", handler, true);
+    return () => document.removeEventListener("mousedown", handler, true);
+  }, [isOpen]);
+
+  // Auto-focus search when picker opens
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => searchRef.current?.focus(), 60);
+    }
+  }, [isOpen]);
+
+  const closePicker = () => {
+    setIsOpen(false);
+    setSelectedBin(null);
+    setSearchValue("");
+    setHighlightedIndex(-1);
+  };
+
   const filteredLocations = useMemo(() => {
-    if (!searchValue || binLocations.length === 0) return binLocations;
+    if (!searchValue) return binLocations;
     return binLocations.filter((loc) =>
       loc.toLowerCase().includes(searchValue.toLowerCase())
     );
   }, [searchValue, binLocations]);
 
-  const handleSelectLocation = (location) => {
-    setTempBin(location);
+  const handleSelectBin = (loc) => {
+    setSelectedBin(loc);
     setSearchValue("");
-    setShowSuggestions(false);
     setHighlightedIndex(-1);
   };
 
   const handleSave = () => {
     fetcher.submit(
-      { actionType: "updateBin", productId, binValue: tempBin },
+      { actionType: "updateBin", productId, binValue: selectedBin },
       { method: "post" }
     );
   };
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setTempBin(bin);
-    setSearchValue("");
-    setShowSuggestions(false);
-    setHighlightedIndex(-1);
-  };
-
   const handleKeyDown = (e) => {
-    if (!showSuggestions || filteredLocations.length === 0) return;
-
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setHighlightedIndex((prev) =>
-          prev < filteredLocations.length - 1 ? prev + 1 : prev
-        );
+        setHighlightedIndex((p) => Math.min(p + 1, filteredLocations.length - 1));
         break;
       case "ArrowUp":
         e.preventDefault();
-        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        setHighlightedIndex((p) => Math.max(p - 1, 0));
         break;
       case "Enter":
         e.preventDefault();
-        if (highlightedIndex >= 0) {
-          handleSelectLocation(filteredLocations[highlightedIndex]);
-        }
+        if (highlightedIndex >= 0) handleSelectBin(filteredLocations[highlightedIndex]);
         break;
       case "Escape":
         e.preventDefault();
-        setShowSuggestions(false);
-        break;
-      default:
+        closePicker();
         break;
     }
   };
 
-  if (isEditing) {
-    return (
-      <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
-        <Card>
-          <BlockStack gap="300">
-            <BlockStack gap="100">
-              <Text variant="bodySm" fontWeight="bold" as="label">
-                🔍 Search Bin Location
-              </Text>
-              <Text variant="bodyXs" tone="subdued">
-                Start typing to filter or use arrow keys to navigate
-              </Text>
-            </BlockStack>
+  const isSaving = fetcher.state !== "idle";
 
-            <TextField
-              value={searchValue}
-              onChange={(val) => {
-                setSearchValue(val);
-                setShowSuggestions(true);
-                setHighlightedIndex(-1);
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type location name..."
-              autoComplete="off"
-              labelHidden
-              label="Search"
-              type="text"
-              suffix={tempBin && <CheckIcon />}
-            />
-
-            {binLocations.length === 0 && (
-              <Banner tone="warning">
-                <Text variant="bodySm">
-                  No bin locations imported yet. Please import a file first.
-                </Text>
-              </Banner>
-            )}
-
-            {showSuggestions && binLocations.length > 0 && (
-              <Box
+  const panel = isOpen && portalRoot ? createPortal(
+    <div
+      id="bin-editor-portal-panel"
+      style={{
+        position: "absolute",
+        top: panelPos.top,
+        left: panelPos.left,
+        zIndex: 9999,
+        width: "260px",
+        background: "#FAF7F3",
+        border: "1px solid #D8BFA4",
+        borderRadius: "var(--p-border-radius-300)",
+        boxShadow: "0 4px 20px rgba(148, 85, 40, 0.12)",
+        padding: "12px",
+      }}
+    >
+      {selectedBin ? (
+        /* ── Selected state: show bin + Save/Change ── */
+        <BlockStack gap="200">
+          <div style={{
+            background: "#FAEBE1",
+            border: "1px solid #C9A273",
+            borderRadius: "var(--p-border-radius-200)",
+            padding: "10px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <InlineStack gap="150" blockAlign="center">
+              <div style={{ color: "#C9A273", display: "flex" }}>
+                <Icon source={LocationIcon} />
+              </div>
+              <Text variant="bodySm" fontWeight="semibold" fontFamily="mono">{selectedBin}</Text>
+            </InlineStack>
+            <button
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#945528", fontSize: "12px", padding: "2px 6px", fontWeight: "600" }}
+              onMouseDown={(e) => { e.stopPropagation(); setSelectedBin(null); setTimeout(() => searchRef.current?.focus(), 40); }}
+            >
+              Change
+            </button>
+          </div>
+          <InlineStack gap="200">
+            <Button
+              variant="primary"
+              size="slim"
+              onClick={handleSave}
+              loading={isSaving}
+              disabled={isSaving}
+              fullWidth
+            >
+              Save Location
+            </Button>
+            <Button size="slim" variant="tertiary" onClick={closePicker} disabled={isSaving}>
+              Cancel
+            </Button>
+          </InlineStack>
+        </BlockStack>
+      ) : (
+        /* ── Search state ── */
+        <BlockStack gap="200">
+          {binLocations.length === 0 ? (
+            <Text variant="bodySm" tone="subdued">No bin locations available. Import locations first.</Text>
+          ) : (
+            <>
+              <input
+                ref={searchRef}
+                type="text"
+                value={searchValue}
+                onChange={(e) => { setSearchValue(e.target.value); setHighlightedIndex(-1); }}
+                onKeyDown={handleKeyDown}
+                placeholder="Search bin location..."
                 style={{
-                  border: "1px solid var(--p-color-border)",
-                  borderRadius: "8px",
-                  maxHeight: "320px",
-                  overflowY: "auto",
-                  background: "var(--p-color-bg-surface)",
+                  width: "100%",
+                  padding: "8px 10px",
+                  border: "1px solid #D8BFA4",
+                  borderRadius: "var(--p-border-radius-200)",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                  background: "#FFFFFF",
                 }}
-              >
-                {filteredLocations.length > 0 ? (
-                  <div>
-                    {filteredLocations.map((location, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleSelectLocation(location)}
-                        style={{
-                          padding: "10px 12px",
-                          cursor: "pointer",
-                          borderBottom: "1px solid var(--p-color-border-subdued)",
-                          backgroundColor:
-                            highlightedIndex === idx
-                              ? "var(--p-color-bg-fill-secondary)"
-                              : tempBin === location
-                                ? "var(--p-color-bg-fill-tertiary)"
-                                : "transparent",
-                          transition: "background-color 0.15s",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                        onMouseEnter={() => setHighlightedIndex(idx)}
-                      >
-                        {tempBin === location && (
-                          <CheckIcon width="16px" height="16px" />
-                        )}
-                        <Text
-                          variant="bodySm"
-                          fontFamily="mono"
-                          fontWeight={tempBin === location ? "bold" : "normal"}
-                        >
-                          {location}
-                        </Text>
-                      </div>
-                    ))}
+              />
+              <div style={{
+                border: "1px solid #D8BFA4",
+                borderRadius: "var(--p-border-radius-200)",
+                maxHeight: "220px",
+                overflowY: "auto",
+                background: "#FFFFFF",
+              }}>
+                {filteredLocations.length === 0 ? (
+                  <div style={{ padding: "12px", textAlign: "center", color: "#945528", fontSize: "13px" }}>
+                    No matches found
                   </div>
                 ) : (
-                  <Box padding="400" style={{ textAlign: "center" }}>
-                    <Text variant="bodySm" tone="subdued">
-                      No matching locations found
-                    </Text>
-                  </Box>
+                  filteredLocations.map((loc, idx) => (
+                    <div
+                      key={idx}
+                      onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); handleSelectBin(loc); }}
+                      style={{
+                        padding: "9px 12px",
+                        cursor: "pointer",
+                        borderBottom: idx < filteredLocations.length - 1 ? "1px solid var(--p-color-border-subdued)" : "none",
+                        background: highlightedIndex === idx ? "#F1ECE5" : "transparent",
+                        fontFamily: "monospace",
+                        fontSize: "13px",
+                        userSelect: "none",
+                      }}
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                    >
+                      {loc}
+                    </div>
+                  ))
                 )}
-              </Box>
-            )}
-
-            <InlineStack gap="200">
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSave();
-                }}
-                loading={fetcher.state !== "idle"}
-                variant="primary"
-                fullWidth
-                disabled={!tempBin || fetcher.state !== "idle"}
-              >
-                Save Location
-              </Button>
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCancel();
-                }}
-                variant="tertiary"
-                disabled={fetcher.state !== "idle"}
-              >
-                Cancel
-              </Button>
-            </InlineStack>
-          </BlockStack>
-        </Card>
-      </div>
-    );
-  }
+              </div>
+            </>
+          )}
+          <button
+            onMouseDown={(e) => { e.stopPropagation(); closePicker(); }}
+            style={{
+              width: "100%",
+              padding: "7px",
+              background: "none",
+              border: "1px solid #D8BFA4",
+              borderRadius: "var(--p-border-radius-200)",
+              cursor: "pointer",
+              fontSize: "13px",
+              color: "#945528",
+            }}
+          >
+            Cancel
+          </button>
+        </BlockStack>
+      )}
+    </div>,
+    portalRoot
+  ) : null;
 
   return (
-    <Button
-      onClick={(e) => {
-        e.stopPropagation();
-        setIsEditing(true);
-      }}
-      size="slim"
-      variant={bin ? "secondary" : "primary"}
-      tone={bin ? undefined : "caution"}
-    >
-      {bin ? (
-        <InlineStack gap="150" align="center">
-          <Text variant="bodySm" fontWeight="bold">
-            📍 {bin}
-          </Text>
-        </InlineStack>
-      ) : (
-        <InlineStack gap="150" align="center">
-          <Text>+ Assign Bin Location</Text>
-        </InlineStack>
-      )}
-    </Button>
+    <>
+      <button
+        ref={buttonRef}
+        onMouseDown={openPicker}
+        style={{
+          padding: "5px 12px",
+          borderRadius: "var(--p-border-radius-200)",
+          border: bin ? "1px solid #D8BFA4" : "1px solid #C9A273",
+          background: bin ? "#FAF7F3" : "#FAEBE1",
+          cursor: "pointer",
+          fontSize: "13px",
+          fontWeight: bin ? "500" : "600",
+          color: bin ? "var(--p-color-text)" : "#7a4800",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {bin ? `📍 ${bin}` : "+ Assign Bin"}
+      </button>
+      {panel}
+    </>
   );
 }

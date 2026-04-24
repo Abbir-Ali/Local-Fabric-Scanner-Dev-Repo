@@ -3,6 +3,26 @@
     const STORAGE_KEY_PRINTED = 'fb_printed_labels_stable';
     const PROXY_URL = '/apps/fabric-scanner/get';
 
+    // ── Inject loader keyframe into document.head (bypasses theme CSS scoping) ──
+    (function injectLoaderStyles() {
+        if (document.getElementById('fb-loader-keyframes')) return;
+        const s = document.createElement('style');
+        s.id = 'fb-loader-keyframes';
+        s.textContent = `
+            @keyframes fbDotBounce {
+                0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+                40%            { transform: scale(1.2); opacity: 1;   }
+            }
+            #fb-loader {
+                display: none !important;
+            }
+            #fb-loader.fb-loader-active {
+                display: flex !important;
+            }
+        `;
+        document.head.appendChild(s);
+    })();
+
     // ── Toast notification system ─────────────────────────────────────────
     const fbToast = (message, type = 'info', title = '', duration = 4000) => {
         const container = document.getElementById('fb-toast-container');
@@ -78,7 +98,15 @@
         histEnd = null;
     let lastOpenedOrderId = null; // Track which order was last opened
 
-    const setLoader = (show) => (document.getElementById('fb-loader').style.display = show ? 'flex' : 'none');
+    const setLoader = (show) => {
+        const el = document.getElementById('fb-loader');
+        if (!el) return;
+        if (show) {
+            el.classList.add('fb-loader-active');
+        } else {
+            el.classList.remove('fb-loader-active');
+        }
+    };
 
     const loadState = () => {
         try {

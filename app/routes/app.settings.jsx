@@ -269,12 +269,12 @@ export default function Settings() {
                             <div style={{ 
                               width: '160px', 
                               height: '160px', 
-                              border: '2px dashed #ccc', 
+                              border: '2px dashed #D8BFA4', 
                               borderRadius: '12px', 
                               display: 'flex', 
                               alignItems: 'center', 
                               justifyContent: 'center',
-                              background: '#fff',
+                              background: '#FAF7F3',
                               overflow: 'hidden',
                               boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                             }}>
