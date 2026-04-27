@@ -38,7 +38,7 @@ export const loader = async ({ request }) => {
   );
 
   const locations = await getShopLocations(admin);
-  const primaryLocation = locations.find(loc => loc.shipsInventory) || locations[0];
+  const primaryLocation = locations.find(loc => loc.isPrimary) || locations[0];
   const locationId = url.searchParams.get("locationId") || primaryLocation?.id || null;
 
   const { edges, pageInfo } = await getFabricInventory(admin, cursor, {
@@ -209,7 +209,7 @@ export default function FabricInventory() {
     if (!locations || locations.length === 0) return [{ label: "No locations found", value: "" }];
     return locations.map(loc => ({ label: loc.name, value: loc.id }));
   }, [locations]);
-  // sort options 
+  // sort options
   const sortOptions = [
     { label: 'Date', value: 'CREATED_AT desc', directionLabel: 'Newest first' },
     { label: 'Date', value: 'CREATED_AT asc', directionLabel: 'Oldest first' },
@@ -314,18 +314,13 @@ export default function FabricInventory() {
     }
     if (d.actionType === "addManualBinLocation") {
       if (d.success) {
-        setImportFeedback({ type: "success", message: `Added location successfully.` });
         navigate(".", { replace: true });
-      } else if (d.error) {
-        setImportFeedback({ type: "error", message: d.error });
       }
     }
     if (d.actionType === "deleteBinLocation" && d.success) {
-      setImportFeedback({ type: "success", message: `Deleted ${d.deleted} successfully.` });
       navigate(".", { replace: true });
     }
     if (d.actionType === "clearAllBinLocations" && d.success) {
-      setImportFeedback({ type: "success", message: "All bin locations cleared." });
       navigate(".", { replace: true });
     }
   }, [fetcher.data, navigate]);
@@ -540,13 +535,16 @@ export default function FabricInventory() {
   const isLoading = navigation.state === "loading" || fetcher.state !== "idle";
 
   const rowMarkup = products.map(({ node }, index) => {
-    const { title, id, legacyResourceId, featuredMedia, variants, metafields: metaEdges } = node;
+    const { title, id, legacyResourceId, featuredImage, variants, metafields: metaEdges } = node;
     const variant = variants.edges[0]?.node;
     const sku = variant?.sku || "N/A";
     const barcode = variant?.barcode || "";
     const inventoryItemId = variant?.inventoryItem?.id;
     const binMeta = metaEdges?.edges.find(e => e.node.key === "bin_locations")?.node;
     const adminUrl = `https://admin.shopify.com/store/${shopDomain}/products/${legacyResourceId}`;
+
+    // Calculate global index based on page number
+    const globalIndex = (page - 1) * 5 + index + 1;
 
     // Find the inventory level matching the selected locationId
     const levels = variant?.inventoryItem?.inventoryLevels?.edges || [];
@@ -557,12 +555,12 @@ export default function FabricInventory() {
       <IndexTable.Row id={id} key={id} position={index}>
         <IndexTable.Cell>
           <Box paddingInlineStart="300">
-            <Text variant="bodySm" tone="subdued" fontWeight="bold">#{index + 1}</Text>
+            <Text variant="bodySm" tone="subdued" fontWeight="bold">#{globalIndex}</Text>
           </Box>
         </IndexTable.Cell>
         <IndexTable.Cell>
           <div style={{ padding: '8px 0' }}>
-            <Thumbnail source={featuredMedia?.preview?.image?.url || ""} alt={title} size="large" />
+            <Thumbnail source={featuredImage?.url || ""} alt={title} size="large" />
           </div>
         </IndexTable.Cell>
         <IndexTable.Cell>

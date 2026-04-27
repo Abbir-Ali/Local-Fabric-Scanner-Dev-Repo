@@ -134,7 +134,7 @@ export async function setInventory(admin, inventoryItemId, locationId, quantity)
         input: {
           reason: "correction",
           name: "available",
-          ignoreCompareQuantity: true,
+          changeFromQuantity: null, // Explicitly opt out of compare-and-swap (replaces deprecated ignoreCompareQuantity)
           quantities: [
             {
               quantity: parseInt(quantity, 10),

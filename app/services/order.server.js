@@ -31,8 +31,8 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
                         sku
                         product {
                           productType
-                          featuredMedia {
-                            preview { image { url } }
+                          featuredImage {
+                            url
                           }
                           metafields(first: 10) {
                             edges {
@@ -121,7 +121,11 @@ export async function getFulfilledFabricOrders(admin, cursor = null, direction =
                       unfulfilledQuantity
                       variant {
                          barcode
-                         product { featuredMedia { preview { image { url } } } }
+                         product {
+                           featuredImage {
+                             url
+                           }
+                         }
                       }
                     }
                   }
@@ -177,8 +181,8 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
                 legacyResourceId
                 title
                 totalInventory
-                featuredMedia {
-                  preview { image { url } }
+                featuredImage {
+                  url
                 }
                 metafields(first: 10) {
                   edges {
@@ -316,8 +320,8 @@ export async function getPartiallyFulfilledOrders(admin, cursor = null, directio
                         sku
                         product {
                           productType
-                          featuredMedia {
-                            preview { image { url } }
+                          featuredImage {
+                            url
                           }
                           metafields(first: 10) {
                             edges {
