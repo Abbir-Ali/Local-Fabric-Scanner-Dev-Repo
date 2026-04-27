@@ -30,3 +30,11 @@ database.sqlite
 /prisma/*.sqlite
 /prisma/*.sqlite-journal
 /public/bin-locations/*.txt
+
+# Kiro IDE Configuration (local only)
+.kiro/
+.vscode/
+setup-kiro.cjs
+
+# Keep only the setup guide in git
+!KIRO_SETUP_GUIDE.md
