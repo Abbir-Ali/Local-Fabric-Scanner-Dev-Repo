@@ -56,7 +56,7 @@ export default function Logs() {
       return (
         <IndexTable.Row id={id} key={id} position={index}>
           <IndexTable.Cell>
-            <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{(pagination.page - 1) * 10 + index + 1}</Text>
+            <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{(pagination.page - 1) * 5 + index + 1}</Text>
           </IndexTable.Cell>
           <IndexTable.Cell>
             <Text variant="bodyMd" fontWeight="bold" as="span">{new Date(timestamp).toLocaleString()}</Text>

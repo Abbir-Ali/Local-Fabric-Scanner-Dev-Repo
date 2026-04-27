@@ -1,6 +1,6 @@
 export async function getFabricOrders(admin, cursor = null, direction = "next") {
   try {
-    const paginationArgs = direction === "prev" ? `last: 10, before: "${cursor}"` : `first: 10, after: ${cursor ? `"${cursor}"` : "null"}`;
+    const paginationArgs = direction === "prev" ? `last: 5, before: "${cursor}"` : `first: 5, after: ${cursor ? `"${cursor}"` : "null"}`;
     const response = await admin.graphql(
       `#graphql
         query getFabricOrders($query: String) {
@@ -73,7 +73,7 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
             }
           }
         }`,
-      { variables: { query: "(fulfillment_status:unfulfilled OR fulfillment_status:partial) AND tag:swatch-only" } }
+      { variables: { query: "fulfillment_status:unfulfilled AND tag:swatch-only" } }
     );
     const responseJson = await response.json();
     return {
@@ -88,7 +88,7 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
 
 export async function getFulfilledFabricOrders(admin, cursor = null, direction = "next") {
   try {
-    const paginationArgs = direction === "prev" ? `last: 10, before: "${cursor}"` : `first: 10, after: ${cursor ? `"${cursor}"` : "null"}`;
+    const paginationArgs = direction === "prev" ? `last: 5, before: "${cursor}"` : `first: 5, after: ${cursor ? `"${cursor}"` : "null"}`;
     const response = await admin.graphql(
       `#graphql
         query getFulfilledOrders {
@@ -160,9 +160,9 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
         : 'product_type:"Swatch Item"';
     }
 
-    const paginationArgs = direction === "prev" ? `last: 10, before: "${cursor}"` : `first: 10, after: ${cursor ? `"${cursor}"` : "null"}`;
+    const paginationArgs = direction === "prev" ? `last: 5, before: "${cursor}"` : `first: 5, after: ${cursor ? `"${cursor}"` : "null"}`;
 
-    console.log(`[INVENTORY SEARCH] Variables:`, { finalQuery, activeSortKey, activeReverse, isBinSearch, pagination: isBinSearch ? '100 items' : '10 items' });
+    console.log(`[INVENTORY SEARCH] Variables:`, { finalQuery, activeSortKey, activeReverse, isBinSearch, pagination: isBinSearch ? '100 items' : '5 items' });
 
     let resJson;
     try {
@@ -289,7 +289,7 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
 }
 export async function getPartiallyFulfilledOrders(admin, cursor = null, direction = "next") {
   try {
-    const paginationArgs = direction === "prev" ? `last: 10, before: "${cursor}"` : `first: 10, after: ${cursor ? `"${cursor}"` : "null"}`;
+    const paginationArgs = direction === "prev" ? `last: 5, before: "${cursor}"` : `first: 5, after: ${cursor ? `"${cursor}"` : "null"}`;
     const response = await admin.graphql(
       `#graphql
         query getPartiallyFulfilledOrders {
@@ -381,7 +381,7 @@ export async function getFulfilledOrdersCount(admin) {
         }`
     );
     const resJson = await response.json();
-    // In Shopify GraphQL, the total count is available if you request it via connection, 
+    // In Shopify GraphQL, the total count is available if you request it via connection,
     // but the simplest way here is to use the nodes count or a dedicated count query if allowed.
     // However, the standard way is to use the query above.
     // To get the ACTUAL total count efficiently:
@@ -397,6 +397,42 @@ export async function getFulfilledOrdersCount(admin) {
     return countData.data?.ordersCount?.count || 0;
   } catch (error) {
     console.error("Fulfilled Count Error:", error);
+    return 0;
+  }
+}
+
+export async function getPendingOrdersCount(admin) {
+  try {
+    const countResponse = await admin.graphql(
+      `#graphql
+      query getPendingCount {
+        ordersCount(query: "fulfillment_status:unfulfilled AND tag:swatch-only") {
+          count
+        }
+      }`
+    );
+    const countData = await countResponse.json();
+    return countData.data?.ordersCount?.count || 0;
+  } catch (error) {
+    console.error("Pending Count Error:", error);
+    return 0;
+  }
+}
+
+export async function getPartialOrdersCount(admin) {
+  try {
+    const countResponse = await admin.graphql(
+      `#graphql
+      query getPartialCount {
+        ordersCount(query: "fulfillment_status:partial AND tag:swatch-only") {
+          count
+        }
+      }`
+    );
+    const countData = await countResponse.json();
+    return countData.data?.ordersCount?.count || 0;
+  } catch (error) {
+    console.error("Partial Count Error:", error);
     return 0;
   }
 }

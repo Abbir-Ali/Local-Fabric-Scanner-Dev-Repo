@@ -13,9 +13,9 @@ export async function createScanLog(shop, data) {
   });
 }
 
-export async function getScanLogs(shop, { page = 1, limit = 10, query = "" } = {}) {
+export async function getScanLogs(shop, { page = 1, limit = 5, query = "" } = {}) {
   const skip = (page - 1) * limit;
-  const where = { 
+  const where = {
     shop,
     ...(query ? {
       OR: [
@@ -68,16 +68,16 @@ export async function getDashboardStats(shop) {
     })
   ]);
 
-  return { 
-    scansToday, 
-    totalFulfilled: fulfilledGroups.length 
+  return {
+    scansToday,
+    totalFulfilled: fulfilledGroups.length
   };
 }
 
 export async function getLogForOrder(shop, orderId) {
   return await db.scanLog.findFirst({
-    where: { 
-      shop, 
+    where: {
+      shop,
       orderId: { contains: orderId },
       OR: [
         { status: "FULFILLED" },
@@ -90,8 +90,8 @@ export async function getLogForOrder(shop, orderId) {
 
 export async function getLogsForOrder(shop, orderId) {
   return await db.scanLog.findMany({
-    where: { 
-      shop, 
+    where: {
+      shop,
       orderId: { contains: orderId },
       OR: [
         { status: "FULFILLED" },

@@ -1,7 +1,7 @@
 import { useLoaderData, useNavigate, useSearchParams, useRevalidator } from "@remix-run/react";
 import { useEffect } from "react";
 import { authenticate } from "../shopify.server";
-import { getFabricOrders, getFulfilledFabricOrders, getPartiallyFulfilledOrders, getFulfilledOrdersCount } from "../services/order.server";
+import { getFabricOrders, getFulfilledFabricOrders, getPartiallyFulfilledOrders, getFulfilledOrdersCount, getPendingOrdersCount, getPartialOrdersCount } from "../services/order.server";
 import BarcodeImage from "../components/BarcodeImage";
 
 // Components
@@ -30,12 +30,14 @@ export const loader = async ({ request }) => {
   const fulfilledCursor = url.searchParams.get("fulfilledCursor");
   const fulfilledDir = url.searchParams.get("fulfilledDir") || "next";
 
-  const [pendingData, partialData, fulfilledData, stats, liveFulfilledCount, settings] = await Promise.all([
+  const [pendingData, partialData, fulfilledData, stats, liveFulfilledCount, livePendingCount, livePartialCount, settings] = await Promise.all([
     getFabricOrders(admin, pendingCursor, pendingDir),
     getPartiallyFulfilledOrders(admin, partialCursor, partialDir),
     getFulfilledFabricOrders(admin, fulfilledCursor, fulfilledDir),
     getDashboardStats(session.shop),
     getFulfilledOrdersCount(admin),
+    getPendingOrdersCount(admin),
+    getPartialOrdersCount(admin),
     getAppSettings(session.shop)
   ]);
 
@@ -49,18 +51,19 @@ export const loader = async ({ request }) => {
     return { ...edge, logs: logs || [] };
   }));
 
-  // Filter out orders that are already in the partially fulfilled list to prevent duplicates on the dashboard
-  const partialIds = new Set(partialData.edges.map(e => e.node.id));
-  const pendingFiltered = pendingData.edges.filter(e => !partialIds.has(e.node.id));
-
   return {
-    swatchOrders: pendingFiltered,
+    swatchOrders: pendingData.edges,
     pendingPageInfo: pendingData.pageInfo,
     partialOrders: partialWithLogs,
     partialPageInfo: partialData.pageInfo,
     fulfilledOrders: fulfilledWithLogs,
     fulfilledPageInfo: fulfilledData.pageInfo,
-    stats: { ...stats, totalFulfilled: liveFulfilledCount, totalPartial: partialData.edges.length },
+    stats: {
+      ...stats,
+      totalFulfilled: liveFulfilledCount,
+      totalPending: livePendingCount,
+      totalPartial: livePartialCount
+    },
     settings,
     shopDomain: session.shop.replace('.myshopify.com', '')
   };
@@ -183,7 +186,7 @@ export default function Index() {
             <Card>
               <BlockStack gap="200">
                 <Text variant="headingSm" as="h3">Pending Orders</Text>
-                <Text variant="heading2xl" as="p">{swatchOrders.length === 10 ? "10+" : swatchOrders.length}</Text>
+                <Text variant="heading2xl" as="p">{stats.totalPending || 0}</Text>
                 <Text tone="subdued" variant="bodySm">Orders awaiting fulfillment</Text>
               </BlockStack>
             </Card>
@@ -213,7 +216,7 @@ export default function Index() {
               ) : (
                 <BlockStack gap="400">
                   {swatchOrders.map(({ node: order }, idx) => (
-                    <OrderRow key={order.id} order={order} status="pending" index={(parseInt(searchParams.get("pendingPage") || "1") - 1) * 10 + idx + 1} shopDomain={shopDomain} />
+                    <OrderRow key={order.id} order={order} status="pending" index={(parseInt(searchParams.get("pendingPage") || "1") - 1) * 5 + idx + 1} shopDomain={shopDomain} />
                   ))}
                   <Pagination
                     hasPrevious={pendingPageInfo?.hasPreviousPage}
@@ -241,7 +244,7 @@ export default function Index() {
                       key={order.id}
                       order={order}
                       logs={logs}
-                      index={(parseInt(searchParams.get("partialPage") || "1") - 1) * 10 + idx + 1}
+                      index={(parseInt(searchParams.get("partialPage") || "1") - 1) * 5 + idx + 1}
                       shopDomain={shopDomain}
                     />
                   ))}
@@ -272,7 +275,7 @@ export default function Index() {
                       order={edge.node}
                       status="fulfilled"
                       logs={edge.logs}
-                      index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * 10 + idx + 1}
+                      index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * 5 + idx + 1}
                       shopDomain={shopDomain}
                     />
                   ))}
