@@ -9,7 +9,7 @@ export const loader = async ({ request }) => {
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get("page") || "1");
   const query = url.searchParams.get("query") || "";
-  
+
   const { logs, pagination } = await getScanLogs(session.shop, { page, query });
   return { logs, pagination, query, shopDomain: session.shop.replace('.myshopify.com', '') };
 };
@@ -21,7 +21,7 @@ export default function Logs() {
   const [searchValue, setSearchValue] = useState(initialQuery);
 
   const handleSearchChange = useCallback((value) => setSearchValue(value), []);
-  
+
   const handleSearchSubmit = () => {
     const params = new URLSearchParams(searchParams);
     if (searchValue) params.set("query", searchValue);
@@ -44,15 +44,15 @@ export default function Logs() {
   const rowMarkup = logs.map(
     ({ id, orderId, status, scannedBy, staffEmail, timestamp, details }, index) => {
       const orderLink = orderId ? (
-        <Link 
-          url={`https://admin.shopify.com/store/${shopDomain}/orders/${orderId.split('/').pop()}`} 
+        <Link
+          url={`https://admin.shopify.com/store/${shopDomain}/orders/${orderId.split('/').pop()}`}
           target="_blank"
           monochrome
         >
           {orderId}
         </Link>
       ) : '-';
-      
+
       return (
         <IndexTable.Row id={id} key={id} position={index}>
           <IndexTable.Cell>
@@ -113,7 +113,7 @@ export default function Logs() {
               >
                 {rowMarkup}
               </IndexTable>
-              
+
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
                 <Pagination
                   hasPrevious={pagination.page > 1}

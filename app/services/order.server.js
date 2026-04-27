@@ -31,7 +31,9 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
                         sku
                         product {
                           productType
-                          featuredImage { url }
+                          featuredMedia {
+                            preview { image { url } }
+                          }
                           metafields(first: 10) {
                             edges {
                               node {
@@ -119,7 +121,7 @@ export async function getFulfilledFabricOrders(admin, cursor = null, direction =
                       unfulfilledQuantity
                       variant {
                          barcode
-                         product { featuredImage { url } }
+                         product { featuredMedia { preview { image { url } } } }
                       }
                     }
                   }
@@ -175,7 +177,9 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
                 legacyResourceId
                 title
                 totalInventory
-                featuredImage { url }
+                featuredMedia {
+                  preview { image { url } }
+                }
                 metafields(first: 10) {
                   edges {
                     node {
@@ -240,7 +244,7 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
 
       edges = edges.filter((edge) => {
         const metafields = edge.node.metafields?.edges || [];
-        const binMetafield = metafields.find(mf => mf.node.key === 'bin_locations' && mf.node.namespace === 'custom');
+        const binMetafield = metafields.find(mf => mf.node.key === 'bin_number' && mf.node.namespace === 'custom');
         const binValue = binMetafield?.node.value || '';
 
         // Debug: Log all BIN values we encounter
@@ -261,7 +265,7 @@ export async function getFabricInventory(admin, cursor = null, { query = "", sor
         console.log(`[BIN SEARCH DEBUG] No matches found for "${query}". Available BIN values in this batch:`);
         resJson.data?.products?.edges?.forEach(edge => {
           const metafields = edge.node.metafields?.edges || [];
-          const binMetafield = metafields.find(mf => mf.node.key === 'bin_locations' && mf.node.namespace === 'custom');
+          const binMetafield = metafields.find(mf => mf.node.key === 'bin_number' && mf.node.namespace === 'custom');
           if (binMetafield) {
             console.log(`  - "${binMetafield.node.value}" (${edge.node.title})`);
           }
@@ -312,7 +316,9 @@ export async function getPartiallyFulfilledOrders(admin, cursor = null, directio
                         sku
                         product {
                           productType
-                          featuredImage { url }
+                          featuredMedia {
+                            preview { image { url } }
+                          }
                           metafields(first: 10) {
                             edges {
                               node {
@@ -405,7 +411,7 @@ export async function getShopLocations(admin) {
             id
             name
             isActive
-            isPrimary
+            shipsInventory
           }
         }
       }`
@@ -460,7 +466,7 @@ export async function getAllFabricInventory(admin) {
       const resJson = await response.json();
       const products = resJson.data?.products?.edges || [];
       allProducts = allProducts.concat(products.map(p => {
-        const binMeta = p.node.metafields.edges.find(e => e.node.key === "bin_locations")?.node;
+        const binMeta = p.node.metafields.edges.find(e => e.node.key === "bin_number")?.node;
         return {
           title: p.node.title,
           sku: p.node.variants.edges[0]?.node?.sku || "N/A",

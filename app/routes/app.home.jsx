@@ -1,11 +1,11 @@
 import { useLoaderData, useNavigate, useSearchParams, useRevalidator } from "@remix-run/react";
 import { useEffect } from "react";
 import { authenticate } from "../shopify.server";
-import { getFabricOrders, getFulfilledFabricOrders, getPartiallyFulfilledOrders, getFulfilledOrdersCount } from "../services/order.server"; 
+import { getFabricOrders, getFulfilledFabricOrders, getPartiallyFulfilledOrders, getFulfilledOrdersCount } from "../services/order.server";
 import BarcodeImage from "../components/BarcodeImage";
 
 // Components
-import { Page, Layout, Card, BlockStack, Text, InlineGrid, Collapsible, Button, Badge, InlineStack, Thumbnail, Pagination, Icon } from "@shopify/polaris"; 
+import { Page, Layout, Card, BlockStack, Text, InlineGrid, Collapsible, Button, Badge, InlineStack, Thumbnail, Pagination, Icon } from "@shopify/polaris";
 import { ChevronDownIcon, ChevronUpIcon, PersonIcon, ViewIcon } from "@shopify/polaris-icons";
 import { useState } from "react";
 
@@ -18,11 +18,11 @@ export const loader = async ({ request }) => {
 
   // Ensure webhooks are registered for this shop
   try {
-     await shopify.registerWebhooks({ session });
+    await shopify.registerWebhooks({ session });
   } catch (e) {
-     console.error("Webhook Registration Error:", e);
+    console.error("Webhook Registration Error:", e);
   }
-  
+
   const pendingCursor = url.searchParams.get("pendingCursor");
   const pendingDir = url.searchParams.get("pendingDir") || "next";
   const partialCursor = url.searchParams.get("partialCursor");
@@ -48,17 +48,17 @@ export const loader = async ({ request }) => {
     const logs = await getLogsForOrder(session.shop, edge.node.id);
     return { ...edge, logs: logs || [] };
   }));
-  
+
   // Filter out orders that are already in the partially fulfilled list to prevent duplicates on the dashboard
   const partialIds = new Set(partialData.edges.map(e => e.node.id));
   const pendingFiltered = pendingData.edges.filter(e => !partialIds.has(e.node.id));
 
-  return { 
-    swatchOrders: pendingFiltered, 
+  return {
+    swatchOrders: pendingFiltered,
     pendingPageInfo: pendingData.pageInfo,
     partialOrders: partialWithLogs,
     partialPageInfo: partialData.pageInfo,
-    fulfilledOrders: fulfilledWithLogs, 
+    fulfilledOrders: fulfilledWithLogs,
     fulfilledPageInfo: fulfilledData.pageInfo,
     stats: { ...stats, totalFulfilled: liveFulfilledCount, totalPartial: partialData.edges.length },
     settings,
@@ -85,63 +85,63 @@ export default function Index() {
   }, [revalidator]);
 
   const handlePendingNext = () => {
-      if(pendingPageInfo?.hasNextPage) {
-          const newParams = new URLSearchParams(searchParams);
-          const currentPage = parseInt(searchParams.get("pendingPage") || "1");
-          newParams.set("pendingCursor", pendingPageInfo.endCursor);
-          newParams.set("pendingPage", (currentPage + 1).toString());
-          newParams.set("pendingDir", "next");
-          navigate(`?${newParams.toString()}`);
-      }
+    if (pendingPageInfo?.hasNextPage) {
+      const newParams = new URLSearchParams(searchParams);
+      const currentPage = parseInt(searchParams.get("pendingPage") || "1");
+      newParams.set("pendingCursor", pendingPageInfo.endCursor);
+      newParams.set("pendingPage", (currentPage + 1).toString());
+      newParams.set("pendingDir", "next");
+      navigate(`?${newParams.toString()}`);
+    }
   };
 
   const handlePendingPrev = () => {
-      if(pendingPageInfo?.hasPreviousPage) {
-          const newParams = new URLSearchParams(searchParams);
-          const currentPage = parseInt(searchParams.get("pendingPage") || "1");
-          newParams.set("pendingCursor", pendingPageInfo.startCursor);
-          newParams.set("pendingPage", (currentPage - 1).toString());
-          newParams.set("pendingDir", "prev");
-          navigate(`?${newParams.toString()}`);
-      } else {
-          const newParams = new URLSearchParams(searchParams);
-          newParams.delete("pendingCursor");
-          newParams.delete("pendingPage");
-          newParams.delete("pendingDir");
-          navigate(`?${newParams.toString()}`);
-      }
+    if (pendingPageInfo?.hasPreviousPage) {
+      const newParams = new URLSearchParams(searchParams);
+      const currentPage = parseInt(searchParams.get("pendingPage") || "1");
+      newParams.set("pendingCursor", pendingPageInfo.startCursor);
+      newParams.set("pendingPage", (currentPage - 1).toString());
+      newParams.set("pendingDir", "prev");
+      navigate(`?${newParams.toString()}`);
+    } else {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete("pendingCursor");
+      newParams.delete("pendingPage");
+      newParams.delete("pendingDir");
+      navigate(`?${newParams.toString()}`);
+    }
   };
 
   const handleFulfilledNext = () => {
-      if(fulfilledPageInfo?.hasNextPage) {
-          const newParams = new URLSearchParams(searchParams);
-          const currentPage = parseInt(searchParams.get("fulfilledPage") || "1");
-          newParams.set("fulfilledCursor", fulfilledPageInfo.endCursor);
-          newParams.set("fulfilledPage", (currentPage + 1).toString());
-          newParams.set("fulfilledDir", "next");
-          navigate(`?${newParams.toString()}`);
-      }
+    if (fulfilledPageInfo?.hasNextPage) {
+      const newParams = new URLSearchParams(searchParams);
+      const currentPage = parseInt(searchParams.get("fulfilledPage") || "1");
+      newParams.set("fulfilledCursor", fulfilledPageInfo.endCursor);
+      newParams.set("fulfilledPage", (currentPage + 1).toString());
+      newParams.set("fulfilledDir", "next");
+      navigate(`?${newParams.toString()}`);
+    }
   };
 
   const handleFulfilledPrev = () => {
-      if(fulfilledPageInfo?.hasPreviousPage) {
-          const newParams = new URLSearchParams(searchParams);
-          const currentPage = parseInt(searchParams.get("fulfilledPage") || "1");
-          newParams.set("fulfilledCursor", fulfilledPageInfo.startCursor);
-          newParams.set("fulfilledPage", (currentPage - 1).toString());
-          newParams.set("fulfilledDir", "prev");
-          navigate(`?${newParams.toString()}`);
-      } else {
-          const newParams = new URLSearchParams(searchParams);
-          newParams.delete("fulfilledCursor");
-          newParams.delete("fulfilledPage");
-          newParams.delete("fulfilledDir");
-          navigate(`?${newParams.toString()}`);
-      }
+    if (fulfilledPageInfo?.hasPreviousPage) {
+      const newParams = new URLSearchParams(searchParams);
+      const currentPage = parseInt(searchParams.get("fulfilledPage") || "1");
+      newParams.set("fulfilledCursor", fulfilledPageInfo.startCursor);
+      newParams.set("fulfilledPage", (currentPage - 1).toString());
+      newParams.set("fulfilledDir", "prev");
+      navigate(`?${newParams.toString()}`);
+    } else {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete("fulfilledCursor");
+      newParams.delete("fulfilledPage");
+      newParams.delete("fulfilledDir");
+      navigate(`?${newParams.toString()}`);
+    }
   };
 
   const handlePartialNext = () => {
-    if(partialPageInfo?.hasNextPage) {
+    if (partialPageInfo?.hasNextPage) {
       const newParams = new URLSearchParams(searchParams);
       const currentPage = parseInt(searchParams.get("partialPage") || "1");
       newParams.set("partialCursor", partialPageInfo.endCursor);
@@ -152,7 +152,7 @@ export default function Index() {
   };
 
   const handlePartialPrev = () => {
-    if(partialPageInfo?.hasPreviousPage) {
+    if (partialPageInfo?.hasPreviousPage) {
       const newParams = new URLSearchParams(searchParams);
       const currentPage = parseInt(searchParams.get("partialPage") || "1");
       newParams.set("partialCursor", partialPageInfo.startCursor);
@@ -177,7 +177,7 @@ export default function Index() {
               <BlockStack gap="200">
                 <Text variant="headingSm" as="h3">Total Scans Today</Text>
                 <Text variant="heading2xl" as="p">{stats.scansToday}</Text>
-                 <Text tone="subdued" variant="bodySm">Collective scans from all staff</Text>
+                <Text tone="subdued" variant="bodySm">Collective scans from all staff</Text>
               </BlockStack>
             </Card>
             <Card>
@@ -203,13 +203,13 @@ export default function Index() {
             </Card>
           </InlineGrid>
         </Layout.Section>
-        
+
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">Pending Swatch Orders</Text>
               {swatchOrders.length === 0 ? (
-                 <Text tone="subdued">No pending orders.</Text>
+                <Text tone="subdued">No pending orders.</Text>
               ) : (
                 <BlockStack gap="400">
                   {swatchOrders.map(({ node: order }, idx) => (
@@ -233,15 +233,15 @@ export default function Index() {
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">Partially Fulfilled Orders</Text>
               {partialOrders.length === 0 ? (
-                 <Text tone="subdued">No partially fulfilled orders.</Text>
+                <Text tone="subdued">No partially fulfilled orders.</Text>
               ) : (
                 <BlockStack gap="400">
                   {partialOrders.map(({ node: order, logs }, idx) => (
-                    <PartialOrderRow 
-                      key={order.id} 
-                      order={order} 
-                      logs={logs} 
-                      index={(parseInt(searchParams.get("partialPage") || "1") - 1) * 10 + idx + 1} 
+                    <PartialOrderRow
+                      key={order.id}
+                      order={order}
+                      logs={logs}
+                      index={(parseInt(searchParams.get("partialPage") || "1") - 1) * 10 + idx + 1}
                       shopDomain={shopDomain}
                     />
                   ))}
@@ -263,26 +263,26 @@ export default function Index() {
             <BlockStack gap="400">
               <Text variant="headingMd" as="h2">Fulfilled History</Text>
               {fulfilledOrders.length === 0 ? (
-                 <Text tone="subdued">No fulfilled orders found.</Text>
+                <Text tone="subdued">No fulfilled orders found.</Text>
               ) : (
                 <BlockStack gap="400">
-                    {fulfilledOrders.map((edge, idx) => (
-                      <OrderRow 
-                        key={edge.node.id} 
-                        order={edge.node} 
-                        status="fulfilled" 
-                        logs={edge.logs} 
-                        index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * 10 + idx + 1} 
-                        shopDomain={shopDomain}
-                      />
-                    ))}
-                    <Pagination
-                      hasPrevious={fulfilledPageInfo?.hasPreviousPage}
-                      onPrevious={handleFulfilledPrev}
-                      hasNext={fulfilledPageInfo?.hasNextPage}
-                      onNext={handleFulfilledNext}
-                      accessibilityLabel="Fulfilled orders pagination"
+                  {fulfilledOrders.map((edge, idx) => (
+                    <OrderRow
+                      key={edge.node.id}
+                      order={edge.node}
+                      status="fulfilled"
+                      logs={edge.logs}
+                      index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * 10 + idx + 1}
+                      shopDomain={shopDomain}
                     />
+                  ))}
+                  <Pagination
+                    hasPrevious={fulfilledPageInfo?.hasPreviousPage}
+                    onPrevious={handleFulfilledPrev}
+                    hasNext={fulfilledPageInfo?.hasNextPage}
+                    onNext={handleFulfilledNext}
+                    accessibilityLabel="Fulfilled orders pagination"
+                  />
                 </BlockStack>
               )}
             </BlockStack>
@@ -304,7 +304,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
   // lineItem.fulfillmentStatus might not be reliable, so we check fulfillmentOrders
   const fulfilledLineItemIds = new Set();
   const unfulfilledLineItemIds = new Set();
-  
+
   // Check fulfillmentOrders to see which items are fulfilled
   if (order.fulfillmentOrders?.edges) {
     order.fulfillmentOrders.edges.forEach(foEdge => {
@@ -315,7 +315,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
           const lineItemId = foLineItem.lineItem.id;
           const remainingQty = foLineItem.remainingQuantity || 0;
           const totalQty = foLineItem.totalQuantity || 0;
-          
+
           // If remaining quantity is 0, the item is fully fulfilled
           if (remainingQty === 0 && totalQty > 0) {
             fulfilledLineItemIds.add(lineItemId);
@@ -329,7 +329,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
       }
     });
   }
-  
+
   const fulfilledItems = fabricItems.filter(i => fulfilledLineItemIds.has(i.node.id));
   const unfulfilledItems = fabricItems.filter(i => unfulfilledLineItemIds.has(i.node.id));
   const progress = `${fulfilledItems.length}/${fabricItems.length}`;
@@ -337,7 +337,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
   // Helper to find which staff member scanned a specific item
   const getStaffForItem = (lineItemId) => {
     if (!logs || logs.length === 0) return null;
-    
+
     // Look through logs for one that contains this item ID in its details metadata
     const itemLog = logs.find(l => {
       // Regex to match [ITEMS:id1,id2]
@@ -361,87 +361,87 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
   const orderUrl = `https://admin.shopify.com/store/${shopDomain}/orders/${orderId}`;
 
   return (
-    <div style={{ border: '2px solid #ff9900', borderRadius: '8px', overflow: 'hidden' }}>
-      <div 
+    <div style={{ border: '2px solid #C9A273', borderRadius: '8px', overflow: 'hidden' }}>
+      <div
         onClick={() => setOpen(!open)}
-        style={{ 
-          padding: '12px 16px', 
-          background: '#fff8e6', 
+        style={{
+          padding: '12px 16px',
+          background: '#FAEBE1',
           cursor: 'pointer',
-          display: 'flex', 
+          display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '16px'
         }}
       >
-        <InlineStack gap="400" wrap="nowrap" style={{flex: 1, minWidth: 0}}>
+        <InlineStack gap="400" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
           <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{index}.</Text>
           <Text variant="bodyMd" fontWeight="bold" as="span">{order.name}</Text>
           <Badge tone="warning">PARTIALLY FULFILLED</Badge>
           <Badge tone="info">{progress} items shipped</Badge>
-          <Text tone="subdued" as="span" style={{whiteSpace: 'nowrap'}}>{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
+          <Text tone="subdued" as="span" style={{ whiteSpace: 'nowrap' }}>{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
         </InlineStack>
 
-        <InlineStack gap="400" blockAlign="center" wrap="nowrap" style={{flexShrink: 0}}>
-          <Button 
-            icon={ViewIcon} 
-            variant="plain" 
+        <InlineStack gap="400" blockAlign="center" wrap="nowrap" style={{ flexShrink: 0 }}>
+          <Button
+            icon={ViewIcon}
+            variant="plain"
             onClick={(e) => { e.stopPropagation(); window.open(orderUrl, '_blank'); }}
             accessibilityLabel="View order"
           >
             View Order
           </Button>
-           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-              <Icon source={PersonIcon} tone="subdued" />
-              <Text variant="bodySm" tone="subdued">
-                {primaryLog?.scannedBy || primaryLog?.staffEmail || "Unknown"}
-              </Text>
-           </div>
-           <Button icon={open ? ChevronUpIcon : ChevronDownIcon} variant="plain" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+            <Icon source={PersonIcon} tone="subdued" />
+            <Text variant="bodySm" tone="subdued">
+              {primaryLog?.scannedBy || primaryLog?.staffEmail || "Unknown"}
+            </Text>
+          </div>
+          <Button icon={open ? ChevronUpIcon : ChevronDownIcon} variant="plain" />
         </InlineStack>
       </div>
 
       <Collapsible open={open} id={`collapse-${order.id}`}>
         <div style={{ padding: '16px', background: '#fff' }}>
           <BlockStack gap="400">
-             <Text variant="headingSm" as="h4">Fulfilled Items ({fulfilledItems.length})</Text>
-             {fulfilledItems.map(({ node: item }, idx) => (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#f1f8f5', borderRadius: '4px' }}>
-                   <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
-                   <div>
-                      <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
-                      <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
-                   </div>
-                   <div style={{ textAlign: 'center' }}>
-                      <Badge tone="success">✓ Shipped</Badge>
-                      {getStaffForItem(item.id) && (
-                        <div style={{ marginTop: '4px' }}>
-                          <Text variant="bodyXs" tone="subdued">By: {getStaffForItem(item.id)}</Text>
-                        </div>
-                      )}
-                   </div>
-                   <div style={{ textAlign: 'right' }}>
-                      <BarcodeImage value={item.variant?.barcode} />
-                   </div>
+            <Text variant="headingSm" as="h4">Fulfilled Items ({fulfilledItems.length})</Text>
+            {fulfilledItems.map(({ node: item }, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#F1ECE5', borderRadius: '4px' }}>
+                <Thumbnail source={item.variant?.product?.featuredMedia?.preview?.image?.url || ""} alt={item.title} size="small" />
+                <div>
+                  <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
+                  <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
                 </div>
-             ))}
+                <div style={{ textAlign: 'center' }}>
+                  <Badge tone="success">✓ Shipped</Badge>
+                  {getStaffForItem(item.id) && (
+                    <div style={{ marginTop: '4px' }}>
+                      <Text variant="bodyXs" tone="subdued">By: {getStaffForItem(item.id)}</Text>
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <BarcodeImage value={item.variant?.barcode} />
+                </div>
+              </div>
+            ))}
 
-             <Text variant="headingSm" as="h4" tone="critical">Unfulfilled Items ({unfulfilledItems.length})</Text>
-             {unfulfilledItems.map(({ node: item }, idx) => (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#fff4f4', borderRadius: '4px' }}>
-                   <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
-                   <div>
-                      <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
-                      <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
-                   </div>
-                   <div style={{ textAlign: 'center' }}>
-                      <Badge tone="attention">Pending</Badge>
-                   </div>
-                   <div style={{ textAlign: 'right' }}>
-                      <BarcodeImage value={item.variant?.barcode} />
-                   </div>
+            <Text variant="headingSm" as="h4" tone="critical">Unfulfilled Items ({unfulfilledItems.length})</Text>
+            {unfulfilledItems.map(({ node: item }, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#FAF7F3', borderRadius: '4px' }}>
+                <Thumbnail source={item.variant?.product?.featuredMedia?.preview?.image?.url || ""} alt={item.title} size="small" />
+                <div>
+                  <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
+                  <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
                 </div>
-             ))}
+                <div style={{ textAlign: 'center' }}>
+                  <Badge tone="attention">Pending</Badge>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <BarcodeImage value={item.variant?.barcode} />
+                </div>
+              </div>
+            ))}
           </BlockStack>
         </div>
       </Collapsible>
@@ -478,70 +478,70 @@ function OrderRow({ order, status, logs, index, shopDomain }) {
   const orderUrl = `https://admin.shopify.com/store/${shopDomain}/orders/${orderId}`;
 
   return (
-    <div style={{ border: '1px solid #dfe3e8', borderRadius: '8px', overflow: 'hidden' }}>
-      <div 
+    <div style={{ border: '1px solid #D8BFA4', borderRadius: '8px', overflow: 'hidden' }}>
+      <div
         onClick={() => setOpen(!open)}
-        style={{ 
-          padding: '12px 16px', 
-          background: '#f9fafb', 
+        style={{
+          padding: '12px 16px',
+          background: '#FAF7F3',
           cursor: 'pointer',
-          display: 'flex', 
+          display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '16px'
         }}
       >
-        <InlineStack gap="400" wrap="nowrap" style={{flex: 1, minWidth: 0}}>
+        <InlineStack gap="400" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
           <Text variant="bodyMd" fontWeight="bold" tone="subdued" as="span">{index}.</Text>
           <Text variant="bodyMd" fontWeight="bold" as="span">{order.name}</Text>
           <Badge tone={status === 'fulfilled' ? 'success' : 'attention'}>{status.toUpperCase()}</Badge>
-          <Text tone="subdued" as="span" style={{whiteSpace: 'nowrap'}}>{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
+          <Text tone="subdued" as="span" style={{ whiteSpace: 'nowrap' }}>{new Date(order.updatedAt || order.createdAt).toLocaleString()}</Text>
         </InlineStack>
 
-        <InlineStack gap="400" blockAlign="center" wrap="nowrap" style={{flexShrink: 0}}>
-          <Button 
-            icon={ViewIcon} 
-            variant="plain" 
+        <InlineStack gap="400" blockAlign="center" wrap="nowrap" style={{ flexShrink: 0 }}>
+          <Button
+            icon={ViewIcon}
+            variant="plain"
             onClick={(e) => { e.stopPropagation(); window.open(orderUrl, '_blank'); }}
             accessibilityLabel="View order"
           >
             View Order
           </Button>
-           {status === 'fulfilled' && (
-             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                <Icon source={PersonIcon} tone="subdued" />
-                <Text variant="bodySm" tone="subdued">
-                  {primaryLog?.scannedBy || primaryLog?.staffEmail || "Unknown"}
-                </Text>
-             </div>
-           )}
-           <Button icon={open ? ChevronUpIcon : ChevronDownIcon} variant="plain" />
+          {status === 'fulfilled' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+              <Icon source={PersonIcon} tone="subdued" />
+              <Text variant="bodySm" tone="subdued">
+                {primaryLog?.scannedBy || primaryLog?.staffEmail || "Unknown"}
+              </Text>
+            </div>
+          )}
+          <Button icon={open ? ChevronUpIcon : ChevronDownIcon} variant="plain" />
         </InlineStack>
       </div>
 
       <Collapsible open={open} id={`collapse-${order.id}`}>
         <div style={{ padding: '16px' }}>
           <BlockStack gap="400">
-             {fabricItems.map(({ node: item }, idx) => (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px' }}>
-                   <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
-                   <div>
-                      <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
-                      <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
-                   </div>
-                   <div style={{ textAlign: 'center' }}>
-                      <Text alignment="center" as="span">Qty: {item.quantity}</Text>
-                      {status === 'fulfilled' && getStaffForItem(item.id) && (
-                        <div style={{ marginTop: '4px' }}>
-                          <Text variant="bodyXs" tone="subdued">By: {getStaffForItem(item.id)}</Text>
-                        </div>
-                      )}
-                   </div>
-                   <div style={{ textAlign: 'right' }}>
-                      <BarcodeImage value={item.variant?.barcode} />
-                   </div>
+            {fabricItems.map(({ node: item }, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px' }}>
+                <Thumbnail source={item.variant?.product?.featuredMedia?.preview?.image?.url || ""} alt={item.title} size="small" />
+                <div>
+                  <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
+                  <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
                 </div>
-             ))}
+                <div style={{ textAlign: 'center' }}>
+                  <Text alignment="center" as="span">Qty: {item.quantity}</Text>
+                  {status === 'fulfilled' && getStaffForItem(item.id) && (
+                    <div style={{ marginTop: '4px' }}>
+                      <Text variant="bodyXs" tone="subdued">By: {getStaffForItem(item.id)}</Text>
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <BarcodeImage value={item.variant?.barcode} />
+                </div>
+              </div>
+            ))}
           </BlockStack>
         </div>
       </Collapsible>

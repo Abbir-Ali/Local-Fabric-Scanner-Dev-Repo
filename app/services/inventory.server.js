@@ -13,7 +13,7 @@
  */
 export async function adjustInventory(admin, inventoryItemId, locationId, delta) {
   console.log(`[INVENTORY] Adjusting: Item=${inventoryItemId}, Location=${locationId}, Delta=${delta}`);
-  
+
   const response = await admin.graphql(
     `#graphql
     mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
@@ -58,7 +58,7 @@ export async function adjustInventory(admin, inventoryItemId, locationId, delta)
     console.error(`[INVENTORY] GraphQL Errors:`, resData.errors);
     throw new Error(resData.errors[0].message);
   }
-  
+
   const userErrors = resData.data?.inventoryAdjustQuantities?.userErrors || [];
   if (userErrors.length > 0) {
     console.error(`[INVENTORY] User Errors:`, userErrors);
@@ -68,7 +68,7 @@ export async function adjustInventory(admin, inventoryItemId, locationId, delta)
   const group = resData.data.inventoryAdjustQuantities.inventoryAdjustmentGroup;
   const change = group?.changes?.find(c => c.name === "available");
   console.log(`[INVENTORY] Success: New available=${change?.quantityAfterChange}`);
-  
+
   // Follow-up check as requested by Assistant
   try {
     await checkInventoryState(admin, inventoryItemId);
@@ -153,14 +153,14 @@ export async function setInventory(admin, inventoryItemId, locationId, quantity)
 
   const resData = await response.json();
   if (resData.errors) throw new Error(resData.errors[0].message);
-  
+
   const userErrors = resData.data?.inventorySetQuantities?.userErrors || [];
   if (userErrors.length > 0) throw new Error(userErrors[0].message);
 
   const group = resData.data.inventorySetQuantities.inventoryAdjustmentGroup;
   try {
     await checkInventoryState(admin, inventoryItemId);
-  } catch (e) {}
+  } catch (e) { }
 
   return group;
 }

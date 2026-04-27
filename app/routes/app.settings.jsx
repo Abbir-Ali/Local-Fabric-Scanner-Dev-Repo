@@ -64,7 +64,7 @@ export default function Settings() {
   const { settings, staff } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
 
@@ -166,8 +166,8 @@ export default function Settings() {
       <IndexTable.Cell><Text fontStyle="italic">****</Text></IndexTable.Cell>
       <IndexTable.Cell>
         <InlineStack gap="200">
-           <Button icon={EditIcon} onClick={() => handleEdit(member)} variant="plain" />
-           <Button icon={DeleteIcon} tone="critical" onClick={() => handleDelete(member.id)} variant="plain" />
+          <Button icon={EditIcon} onClick={() => handleEdit(member)} variant="plain" />
+          <Button icon={DeleteIcon} tone="critical" onClick={() => handleDelete(member.id)} variant="plain" />
         </InlineStack>
       </IndexTable.Cell>
     </IndexTable.Row>
@@ -179,7 +179,7 @@ export default function Settings() {
         <Layout.Section>
           {actionData?.success && <Banner tone="success">Changes saved successfully</Banner>}
           {actionData?.error && <Banner tone="critical">Error: {actionData.error}</Banner>}
-          
+
           <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
             <Box padding="400">
               {selectedTab === 0 ? (
@@ -191,7 +191,7 @@ export default function Settings() {
                         <Button variant="primary" onClick={() => setIsModalOpen(true)}>Add Staff</Button>
                       </InlineStack>
                       <Text tone="subdued">Staff can log in to the Scanner using their Name or Email and PIN.</Text>
-                      
+
                       {staff.length === 0 ? (
                         <Banner tone="info">No staff members configured. Use Admin credentials to login.</Banner>
                       ) : (
@@ -206,7 +206,7 @@ export default function Settings() {
                       )}
                     </BlockStack>
                   </Card>
-                  
+
                   <Card>
                     <BlockStack gap="400">
                       <Text variant="headingMd" as="h2">Global Admin Credentials</Text>
@@ -221,24 +221,24 @@ export default function Settings() {
                       }}>
                         <FormLayout>
                           <InlineGrid columns={2} gap="400">
-                            <TextField 
-                              label="Admin Name" 
+                            <TextField
+                              label="Admin Name"
                               value={adminName}
                               onChange={setAdminName}
-                              autoComplete="off" 
-                              required 
+                              autoComplete="off"
+                              required
                             />
-                            <TextField 
-                              label="Admin PIN" 
+                            <TextField
+                              label="Admin PIN"
                               value={adminPin}
                               onChange={setAdminPin}
-                              type={showAdminPin ? "text" : "password"} 
-                              autoComplete="off" 
-                              required 
+                              type={showAdminPin ? "text" : "password"}
+                              autoComplete="off"
+                              required
                               suffix={
-                                <Button 
-                                  variant="plain" 
-                                  icon={showAdminPin ? HideIcon : ViewIcon} 
+                                <Button
+                                  variant="plain"
+                                  icon={showAdminPin ? HideIcon : ViewIcon}
                                   onClick={() => setShowAdminPin(!showAdminPin)}
                                 />
                               }
@@ -255,7 +255,7 @@ export default function Settings() {
                   <BlockStack gap="400">
                     <Text variant="headingMd" as="h2">Brand Identity</Text>
                     <Text tone="subdued">Upload your brand logo for shipping labels.</Text>
-                    
+
                     <form onSubmit={(e) => {
                       e.preventDefault();
                       const fd = new FormData();
@@ -266,15 +266,15 @@ export default function Settings() {
                       <FormLayout>
                         <BlockStack gap="400">
                           <div style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
-                            <div style={{ 
-                              width: '160px', 
-                              height: '160px', 
-                              border: '2px dashed #ccc', 
-                              borderRadius: '12px', 
-                              display: 'flex', 
-                              alignItems: 'center', 
+                            <div style={{
+                              width: '160px',
+                              height: '160px',
+                              border: '2px dashed #D8BFA4',
+                              borderRadius: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
                               justifyContent: 'center',
-                              background: '#fff',
+                              background: '#FAF7F3',
                               overflow: 'hidden',
                               boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                             }}>
@@ -282,14 +282,14 @@ export default function Settings() {
                                 <img src={brandLogo} alt="Logo Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                               ) : (
                                 <div style={{ textAlign: 'center', padding: '10px' }}>
-                                   <Text tone="subdued">No logo uploaded</Text>
+                                  <Text tone="subdued">No logo uploaded</Text>
                                 </div>
                               )}
                             </div>
-                            
+
                             <BlockStack gap="200">
                               <Text variant="bodyMd" as="p" tone="subdued">
-                                Recommended size: 400x400px. <br/>
+                                Recommended size: 400x400px. <br />
                                 Supports PNG, JPG, SVG.
                               </Text>
                               <InlineStack gap="200">
@@ -320,7 +320,7 @@ export default function Settings() {
                             </BlockStack>
                           </div>
                         </BlockStack>
-                        
+
                         <div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
                           <Button submit variant="primary" disabled={settings?.brandLogo === brandLogo}>
                             Save Brand Settings
@@ -335,7 +335,7 @@ export default function Settings() {
                   <BlockStack gap="400">
                     <Text variant="headingMd" as="h2">Feature Visibility</Text>
                     <Text tone="subdued">Control which features are visible on the scanner frontend.</Text>
-                    
+
                     <form onSubmit={(e) => {
                       e.preventDefault();
                       const fd = new FormData();
@@ -418,17 +418,17 @@ export default function Settings() {
             {staffFormError ? <Banner tone="critical">{staffFormError}</Banner> : null}
             <TextField label="Name" value={newName} onChange={setNewName} autoComplete="off" required />
             <TextField label="Email" value={newEmail} onChange={setNewEmail} type="email" autoComplete="off" required />
-            <TextField 
-              label="PIN (4-6 digits)" 
-              value={newPin} 
-              onChange={setNewPin} 
-              type={showNewPin ? "text" : "password"} 
-              autoComplete="off" 
-              required 
+            <TextField
+              label="PIN (4-6 digits)"
+              value={newPin}
+              onChange={setNewPin}
+              type={showNewPin ? "text" : "password"}
+              autoComplete="off"
+              required
               suffix={
-                <Button 
-                  variant="plain" 
-                  icon={showNewPin ? HideIcon : ViewIcon} 
+                <Button
+                  variant="plain"
+                  icon={showNewPin ? HideIcon : ViewIcon}
                   onClick={() => setShowNewPin(!showNewPin)}
                 />
               }
