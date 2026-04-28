@@ -73,7 +73,7 @@ export async function getFabricOrders(admin, cursor = null, direction = "next") 
             }
           }
         }`,
-      { variables: { query: "fulfillment_status:unfulfilled AND tag:swatch-only" } }
+      { variables: { query: "fulfillment_status:unfulfilled AND (tag:swatch-only OR tag:swatchonly)" } }
     );
     const responseJson = await response.json();
     return {
@@ -92,7 +92,7 @@ export async function getFulfilledFabricOrders(admin, cursor = null, direction =
     const response = await admin.graphql(
       `#graphql
         query getFulfilledOrders {
-          orders(${paginationArgs}, reverse: true, query: "fulfillment_status:fulfilled AND tag:swatch-only") {
+          orders(${paginationArgs}, reverse: true, query: "fulfillment_status:fulfilled AND (tag:swatch-only OR tag:swatchonly)") {
             pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
             edges {
               node {
@@ -297,7 +297,7 @@ export async function getPartiallyFulfilledOrders(admin, cursor = null, directio
     const response = await admin.graphql(
       `#graphql
         query getPartiallyFulfilledOrders {
-          orders(${paginationArgs}, reverse: true, query: "fulfillment_status:partial AND tag:swatch-only") {
+          orders(${paginationArgs}, reverse: true, query: "fulfillment_status:partial AND (tag:swatch-only OR tag:swatchonly)") {
             pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
             edges {
               node {
@@ -379,7 +379,7 @@ export async function getFulfilledOrdersCount(admin) {
     const response = await admin.graphql(
       `#graphql
         query getFulfilledCount {
-          orders(first: 1, query: "fulfillment_status:fulfilled AND tag:swatch-only") {
+          orders(first: 1, query: "fulfillment_status:fulfilled AND (tag:swatch-only OR tag:swatchonly)") {
              nodes { id }
           }
         }`
@@ -392,7 +392,7 @@ export async function getFulfilledOrdersCount(admin) {
     const countResponse = await admin.graphql(
       `#graphql
       query getCount {
-        ordersCount(query: "fulfillment_status:fulfilled AND tag:swatch-only") {
+        ordersCount(query: "fulfillment_status:fulfilled AND (tag:swatch-only OR tag:swatchonly)") {
           count
         }
       }`
@@ -410,7 +410,7 @@ export async function getPendingOrdersCount(admin) {
     const countResponse = await admin.graphql(
       `#graphql
       query getPendingCount {
-        ordersCount(query: "fulfillment_status:unfulfilled AND tag:swatch-only") {
+        ordersCount(query: "fulfillment_status:fulfilled AND (tag:swatch-only OR tag:swatchonly)") {
           count
         }
       }`
@@ -428,7 +428,7 @@ export async function getPartialOrdersCount(admin) {
     const countResponse = await admin.graphql(
       `#graphql
       query getPartialCount {
-        ordersCount(query: "fulfillment_status:partial AND tag:swatch-only") {
+        ordersCount(query: "fulfillment_status:fulfilled AND (tag:swatch-only OR tag:swatchonly)") {
           count
         }
       }`

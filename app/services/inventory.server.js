@@ -14,6 +14,9 @@
 export async function adjustInventory(admin, inventoryItemId, locationId, delta) {
   console.log(`[INVENTORY] Adjusting: Item=${inventoryItemId}, Location=${locationId}, Delta=${delta}`);
 
+  // First, ensure the inventory is activated at this location
+  await ensureInventoryActivated(admin, inventoryItemId, locationId);
+
   const response = await admin.graphql(
     `#graphql
     mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
@@ -110,9 +113,56 @@ async function checkInventoryState(admin, inventoryItemId) {
 }
 
 /**
+ * Activates inventory for an item at a location if not already active
+ */
+async function ensureInventoryActivated(admin, inventoryItemId, locationId) {
+  try {
+    const response = await admin.graphql(
+      `#graphql
+      mutation inventoryActivate($inventoryItemId: ID!, $locationId: ID!) {
+        inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId) {
+          inventoryLevel {
+            id
+            location { id name }
+          }
+          userErrors { field message }
+        }
+      }`,
+      {
+        variables: {
+          inventoryItemId,
+          locationId
+        }
+      }
+    );
+
+    const resData = await response.json();
+    if (resData.errors) {
+      console.error(`[INVENTORY] Activation GraphQL Errors:`, resData.errors);
+      return false;
+    }
+
+    const userErrors = resData.data?.inventoryActivate?.userErrors || [];
+    if (userErrors.length > 0) {
+      console.error(`[INVENTORY] Activation User Errors:`, userErrors);
+      return false;
+    }
+
+    console.log(`[INVENTORY] Activated inventory at location`);
+    return true;
+  } catch (error) {
+    console.error(`[INVENTORY] Activation failed:`, error);
+    return false;
+  }
+}
+
+/**
  * Sets inventory level to an absolute value
  */
 export async function setInventory(admin, inventoryItemId, locationId, quantity) {
+  // First, ensure the inventory is activated at this location
+  await ensureInventoryActivated(admin, inventoryItemId, locationId);
+
   const response = await admin.graphql(
     `#graphql
     mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
@@ -134,7 +184,7 @@ export async function setInventory(admin, inventoryItemId, locationId, quantity)
         input: {
           reason: "correction",
           name: "available",
-          changeFromQuantity: null, // Explicitly opt out of compare-and-swap (replaces deprecated ignoreCompareQuantity)
+          ignoreCompareQuantity: true, // Required in API 2026-01 to skip compare-and-swap
           quantities: [
             {
               quantity: parseInt(quantity, 10),
@@ -160,7 +210,7 @@ export async function setInventory(admin, inventoryItemId, locationId, quantity)
   const group = resData.data.inventorySetQuantities.inventoryAdjustmentGroup;
   try {
     await checkInventoryState(admin, inventoryItemId);
-  } catch (e) { }
+  } catch (e) {}
 
   return group;
 }

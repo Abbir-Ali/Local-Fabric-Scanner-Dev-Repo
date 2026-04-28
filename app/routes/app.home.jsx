@@ -410,7 +410,7 @@ function PartialOrderRow({ order, logs, index, shopDomain }) {
             <Text variant="headingSm" as="h4">Fulfilled Items ({fulfilledItems.length})</Text>
             {fulfilledItems.map(({ node: item }, idx) => (
               <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px', padding: '8px', background: '#F1ECE5', borderRadius: '4px' }}>
-                <Thumbnail source={item.variant?.product?.featuredMedia?.preview?.image?.url || ""} alt={item.title} size="small" />
+                 <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
                 <div>
                   <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
                   <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
@@ -527,7 +527,7 @@ function OrderRow({ order, status, logs, index, shopDomain }) {
           <BlockStack gap="400">
             {fabricItems.map(({ node: item }, idx) => (
               <div key={idx} style={{ display: 'grid', gridTemplateColumns: '60px 2fr 1fr 2fr', alignItems: 'center', gap: '20px' }}>
-                <Thumbnail source={item.variant?.product?.featuredMedia?.preview?.image?.url || ""} alt={item.title} size="small" />
+                 <Thumbnail source={item.variant?.product?.featuredImage?.url || ""} alt={item.title} size="small" />
                 <div>
                   <Text variant="bodyMd" fontWeight="bold">{item.title}</Text>
                   <Text variant="bodySm" tone="subdued">SKU: {item.sku || 'N/A'}</Text>
