@@ -82,8 +82,10 @@ export const loader = async ({ request }) => {
       case "orders": {
         const cursor = url.searchParams.get("cursor");
         const direction = url.searchParams.get("direction") || "next";
+        const searchQuery = url.searchParams.get("search") || "";
+        const limit = parseInt(url.searchParams.get("limit") || "5");
 
-        const result = await getFabricOrders(admin, cursor, direction);
+        const result = await getFabricOrders(admin, cursor, direction, searchQuery, limit);
 
         // Enhance with log data
         const { getLogsForOrder } = await import("../models/logs.server");
@@ -107,8 +109,10 @@ export const loader = async ({ request }) => {
       case "fulfilled": {
         const cursor = url.searchParams.get("cursor");
         const direction = url.searchParams.get("direction") || "next";
+        const searchQuery = url.searchParams.get("search") || "";
+        const limit = parseInt(url.searchParams.get("limit") || "5");
 
-        const result = await getFulfilledFabricOrders(admin, cursor, direction);
+        const result = await getFulfilledFabricOrders(admin, cursor, direction, searchQuery, limit);
 
         // Enhance with log data
         const { getLogForOrder } = await import("../models/logs.server");
@@ -126,8 +130,10 @@ export const loader = async ({ request }) => {
       case "partial": {
         const cursor = url.searchParams.get("cursor");
         const direction = url.searchParams.get("direction") || "next";
+        const searchQuery = url.searchParams.get("search") || "";
+        const limit = parseInt(url.searchParams.get("limit") || "5");
 
-        const result = await getPartiallyFulfilledOrders(admin, cursor, direction);
+        const result = await getPartiallyFulfilledOrders(admin, cursor, direction, searchQuery, limit);
 
         // Enhance with log data
         const { getLogsForOrder } = await import("../models/logs.server");

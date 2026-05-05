@@ -28,21 +28,24 @@ export const loader = async ({ request }) => {
   const query = url.searchParams.get("query") || "";
   const sortKey = url.searchParams.get("sortKey") || "CREATED_AT";
   const reverse = url.searchParams.get("reverse") === "true";
+  const limit = parseInt(url.searchParams.get("limit") || "5");
 
-  // Detect if this is a BIN search (same logic as scanner)
+  // Improved BIN detection: only trigger for patterns that look like actual BIN locations
+  // BIN format: Letter(s) + Number + optional colon + optional number (e.g., A1, A1:2, AA12:5)
   const isBinSearch = query && (
-    query.toLowerCase().includes('bin') ||
-    /^\d/.test(query) || // starts with number
-    /^[a-zA-Z]+\d+/.test(query) || // letter(s) followed by number(s)
-    /^[a-zA-Z]\d+/.test(query) // letter followed by number(s)
+    /^[A-Z]+\d+:\d+$/i.test(query) || // Exact BIN format: A1:2, AA12:5
+    /^[A-Z]+\d+:$/i.test(query) ||    // Partial with colon: A1:, AA12:
+    (/^[A-Z]+\d+$/i.test(query) && query.length <= 4) // Short letter+number: A1, B2, AA1 (but not long SKUs)
   );
+
+  console.log(`[LOADER] Query: "${query}", isBinSearch: ${isBinSearch}, length: ${query.length}`);
 
   const locations = await getShopLocations(admin);
   const primaryLocation = locations.find(loc => loc.isPrimary) || locations[0];
   const locationId = url.searchParams.get("locationId") || primaryLocation?.id || null;
 
   const { edges, pageInfo } = await getFabricInventory(admin, cursor, {
-    query, sortKey, reverse, direction, locationId, isBinSearch
+    query, sortKey, reverse, direction, locationId, isBinSearch, limit
   });
 
   const globalStats = await getGlobalInventoryStats(admin, locationId);
@@ -60,6 +63,7 @@ export const loader = async ({ request }) => {
     initialQuery: query,
     initialSort: sortKey,
     initialReverse: reverse,
+    initialLimit: limit,
     globalStats,
     isBinSearch,
     binLocations,
@@ -82,7 +86,7 @@ export const action = async ({ request }) => {
     const productId = formData.get("productId");
     const binValue = formData.get("binValue");
 
-    try {
+    const runMetafieldSet = async () => {
       const response = await admin.graphql(
         `#graphql
         mutation updateBin($ownerId: ID!, $value: String!) {
@@ -101,13 +105,63 @@ export const action = async ({ request }) => {
         }`,
         { variables: { ownerId: productId, value: binValue || "" } }
       );
+      return response.json();
+    };
 
-      const resData = await response.json();
-      const errors = resData.data?.metafieldsSet?.userErrors || [];
-      if (errors.length > 0) return { success: false, error: errors[0].message };
+    try {
+      let resData = await runMetafieldSet();
+      let errors = resData.data?.metafieldsSet?.userErrors || [];
+
+      // If it failed (likely missing metafield definition), try creating the definition and retry
+      if (errors.length > 0) {
+        console.warn("[UPDATE BIN] First attempt failed, trying to create metafield definition:", errors[0].message);
+        try {
+          await admin.graphql(
+            `#graphql
+            mutation createMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+              metafieldDefinitionCreate(definition: $definition) {
+                createdDefinition { id }
+                userErrors { field message }
+              }
+            }`,
+            {
+              variables: {
+                definition: {
+                  name: "Bin Locations",
+                  namespace: "custom",
+                  key: "bin_locations",
+                  type: "single_line_text_field",
+                  ownerType: "PRODUCT",
+                  description: "Warehouse bin location (e.g. A1:2)",
+                  access: { admin: "MERCHANT_READ_WRITE", storefront: "PUBLIC_READ" },
+                },
+              },
+            }
+          );
+          // Retry the original mutation
+          resData = await runMetafieldSet();
+          errors = resData.data?.metafieldsSet?.userErrors || [];
+        } catch (defErr) {
+          console.error("[UPDATE BIN] Failed to create metafield definition:", defErr.message);
+        }
+      }
+
+      if (errors.length > 0) {
+        console.error("[UPDATE BIN] User errors:", errors);
+        return {
+          success: false,
+          error: `Failed to save bin location: ${errors[0].message}. The metafield definition may be missing — try clicking "Setup Bin Metafield" first.`,
+          field: "bin"
+        };
+      }
       return { success: true, field: "bin", updatedValue: binValue };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error("[UPDATE BIN] Error:", error);
+      return {
+        success: false,
+        error: `Unable to save bin location: ${error.message}`,
+        field: "bin"
+      };
     }
   }
 
@@ -115,10 +169,22 @@ export const action = async ({ request }) => {
     const locationsJson = formData.get("locations");
     try {
       const locations = JSON.parse(locationsJson || "[]");
+      if (locations.length === 0) {
+        return {
+          success: false,
+          actionType,
+          error: "No valid bin locations found in the file. Please check the file format."
+        };
+      }
       const result = await importBinLocations(shop, locations);
       return { success: true, actionType, ...result };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error("[IMPORT BINS] Error:", error);
+      return {
+        success: false,
+        actionType,
+        error: `Import failed: ${error.message}. Please check your file format.`
+      };
     }
   }
 
@@ -184,7 +250,7 @@ export const action = async ({ request }) => {
  * Main page component.
  */
 export default function FabricInventory() {
-  const { products: rawProducts, pageInfo, page, shopDomain, locations, currentLocationId, initialQuery, initialSort, initialReverse, globalStats: initialGlobalStats, isBinSearch: initialIsBinSearch, binLocations: serverBinLocations } = useLoaderData();
+  const { products: rawProducts, pageInfo, page, shopDomain, locations, currentLocationId, initialQuery, initialSort, initialReverse, initialLimit = 5, globalStats: initialGlobalStats, isBinSearch: initialIsBinSearch, binLocations: serverBinLocations } = useLoaderData();
   const products = rawProducts || [];
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -199,6 +265,21 @@ export default function FabricInventory() {
   const [binLocations, setBinLocations] = useState(serverBinLocations || []);
   const [importModalActive, setImportModalActive] = useState(false);
   const [importFeedback, setImportFeedback] = useState(null); // { type: 'success'|'error', message }
+
+  // Setup metafield
+  const [setupModalActive, setSetupModalActive] = useState(false);
+  const setupFetcher = useFetcher();
+
+  // Page size state
+  const [pageSize, setPageSize] = useState(String(initialLimit));
+
+  const pageSizeOptions = [
+    { label: '5 per page', value: '5' },
+    { label: '10 per page', value: '10' },
+    { label: '25 per page', value: '25' },
+    { label: '50 per page', value: '50' },
+    { label: '100 per page', value: '100' },
+  ];
 
   // Keep local state in sync when loader refreshes
   useEffect(() => {
@@ -240,7 +321,7 @@ export default function FabricInventory() {
       params.delete("direction");
       params.set("page", "1");
       navigate(`?${params.toString()}`, { replace: true });
-    }, 600);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [queryValue, searchParams, navigate]);
@@ -280,6 +361,16 @@ export default function FabricInventory() {
     navigate(`?${params.toString()}`);
   }, [searchParams, navigate]);
 
+  const handlePageSizeChange = useCallback((value) => {
+    setPageSize(value);
+    const params = new URLSearchParams(searchParams);
+    params.set("limit", value);
+    params.delete("cursor");
+    params.delete("direction");
+    params.set("page", "1");
+    navigate(`?${params.toString()}`);
+  }, [searchParams, navigate]);
+
   const handlePagination = (cursor, direction) => {
     const params = new URLSearchParams(searchParams);
     if (cursor) {
@@ -307,10 +398,17 @@ export default function FabricInventory() {
   useEffect(() => {
     if (!fetcher.data) return;
     const d = fetcher.data;
-    if (d.actionType === "importBinLocations" && d.success) {
-      setImportFeedback({ type: "success", message: `Import complete — ${d.added} added, ${d.duplicates} duplicates skipped. ${d.total} total locations.` });
-      setImportModalActive(false);
-      navigate(".", { replace: true }); // refresh loader
+    if (d.actionType === "importBinLocations") {
+      if (d.success) {
+        const message = d.added > 0
+          ? `✓ Import successful! Added ${d.added} new location${d.added !== 1 ? 's' : ''}${d.duplicates > 0 ? `, skipped ${d.duplicates} duplicate${d.duplicates !== 1 ? 's' : ''}` : ''}. Total: ${d.total} locations.`
+          : `✓ Import complete. All ${d.duplicates} location${d.duplicates !== 1 ? 's were' : ' was'} already in your database. Total: ${d.total} locations.`;
+        setImportFeedback({ type: "success", message });
+        setImportModalActive(false);
+        navigate(".", { replace: true });
+      } else {
+        setImportFeedback({ type: "critical", message: `Import failed: ${d.error || "Unknown error"}` });
+      }
     }
     if (d.actionType === "addManualBinLocation") {
       if (d.success) {
@@ -321,9 +419,30 @@ export default function FabricInventory() {
       navigate(".", { replace: true });
     }
     if (d.actionType === "clearAllBinLocations" && d.success) {
+      setImportFeedback({ type: "success", message: "✓ All bin locations cleared successfully" });
       navigate(".", { replace: true });
     }
   }, [fetcher.data, navigate]);
+
+  // Handle setup metafield response
+  useEffect(() => {
+    if (!setupFetcher.data) return;
+    const d = setupFetcher.data;
+    if (d.success) {
+      setImportFeedback({
+        type: "success",
+        message: d.alreadyExists
+          ? "✓ Bin Locations metafield is already set up and ready to use!"
+          : "✓ Bin Locations metafield created successfully! You can now assign bins to products."
+      });
+      setSetupModalActive(false);
+    } else {
+      setImportFeedback({
+        type: "critical",
+        message: `Setup failed: ${d.error || "Unknown error"}. Please try creating the metafield manually in Settings → Custom Data → Products.`
+      });
+    }
+  }, [setupFetcher.data]);
 
   const handlePrint = (barcode, title, sku, binNumber) => {
     const printWindow = window.open('', '_blank', 'width=600,height=400');
@@ -532,7 +651,9 @@ export default function FabricInventory() {
 
 
   const resourceName = { singular: 'product', plural: 'products' };
-  const isLoading = navigation.state === "loading" || fetcher.state !== "idle";
+  const isLoading = navigation.state === "loading";
+  const isFetching = fetcher.state !== "idle";
+  const isSearching = navigation.state === "loading" && searchParams.get("query");
 
   const rowMarkup = products.map(({ node }, index) => {
     const { title, id, legacyResourceId, featuredImage, variants, metafields: metaEdges } = node;
@@ -544,7 +665,7 @@ export default function FabricInventory() {
     const adminUrl = `https://admin.shopify.com/store/${shopDomain}/products/${legacyResourceId}`;
 
     // Calculate global index based on page number
-    const globalIndex = (page - 1) * 5 + index + 1;
+    const globalIndex = (page - 1) * parseInt(pageSize) + index + 1;
 
     // Find the inventory level matching the selected locationId
     const levels = variant?.inventoryItem?.inventoryLevels?.edges || [];
@@ -638,6 +759,10 @@ export default function FabricInventory() {
       }}
       secondaryActions={[
         {
+          content: 'Setup Bin Metafield',
+          onAction: () => setSetupModalActive(true),
+        },
+        {
           content: 'Bulk Export Barcodes',
           icon: ExportIcon,
           onAction: () => fetcher.submit({ actionType: "exportAllBarcodes" }, { method: "post" }),
@@ -645,6 +770,12 @@ export default function FabricInventory() {
         },
       ].filter(Boolean)}
     >
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       <Layout>
         <BinLocationModal
           active={importModalActive}
@@ -653,6 +784,12 @@ export default function FabricInventory() {
           onClear={handleClearBinLocations}
           binLocations={binLocations}
           fetcher={fetcher}
+        />
+
+        <SetupMetafieldModal
+          active={setupModalActive}
+          onClose={() => setSetupModalActive(false)}
+          fetcher={setupFetcher}
         />
 
         {importFeedback && (
@@ -749,7 +886,40 @@ export default function FabricInventory() {
 
         <Layout.Section>
           <Card padding="0">
-            <Box minHeight="400px">
+            <Box minHeight="400px" position="relative">
+              {/* Loading Overlay */}
+              {isLoading && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(3px)',
+                  zIndex: 100,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  pointerEvents: 'all',
+                  cursor: 'wait',
+                }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    border: '4px solid #E3E3E3',
+                    borderTop: '4px solid #C9A273',
+                    borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite',
+                  }} />
+                  <Text variant="bodyMd" tone="subdued" fontWeight="semibold">
+                    {isSearching ? 'Searching...' : 'Loading...'}
+                  </Text>
+                </div>
+              )}
+
               {isBinSearch && queryValue && (
                 <Box padding="400" borderBottomWidth="025" borderColor="border" background="bg-fill-tertiary">
                   <InlineStack gap="200" align="start">
@@ -770,10 +940,11 @@ export default function FabricInventory() {
                 onSelect={() => { }}
                 mode={mode}
                 setMode={setMode}
-                loading={isLoading}
+                loading={false}
                 filters={[]}
                 canCreateNewView={false}
-                queryPlaceholder="Search products or bin..."
+                queryPlaceholder="Search by SKU, title, or bin location..."
+                disabled={isLoading}
               />
 
               <IndexTable
@@ -789,20 +960,31 @@ export default function FabricInventory() {
                   { title: 'Barcode Reference' },
                 ]}
                 hasMoreItems={pageInfo?.hasNextPage}
-                loading={isLoading}
+                loading={false}
               >
                 {rowMarkup}
               </IndexTable>
 
               <Box padding="400" borderTopWidth="025" borderColor="border">
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <InlineStack align="space-between" blockAlign="center">
+                  <div style={{ width: '140px' }}>
+                    <Select
+                      label=""
+                      labelHidden
+                      options={pageSizeOptions}
+                      value={pageSize}
+                      onChange={handlePageSizeChange}
+                      disabled={isLoading}
+                    />
+                  </div>
                   <Pagination
-                    hasPrevious={pageInfo?.hasPreviousPage}
+                    hasPrevious={pageInfo?.hasPreviousPage && !isLoading}
                     onPrevious={() => handlePagination(pageInfo.startCursor, "prev")}
-                    hasNext={pageInfo?.hasNextPage}
+                    hasNext={pageInfo?.hasNextPage && !isLoading}
                     onNext={() => handlePagination(pageInfo.endCursor, "next")}
                   />
-                </div>
+                  <div style={{ width: '140px' }} />
+                </InlineStack>
               </Box>
             </Box>
           </Card>
@@ -1274,6 +1456,7 @@ function BinEditor({ productId, initialBin, binLocations = [] }) {
   const [selectedBin, setSelectedBin] = useState(null); // null = nothing chosen yet in this session
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
+  const [errorMessage, setErrorMessage] = useState(null);
   const buttonRef = useRef(null);
   const searchRef = useRef(null);
   const [portalRoot, setPortalRoot] = useState(null);
@@ -1293,6 +1476,11 @@ function BinEditor({ productId, initialBin, binLocations = [] }) {
       setIsOpen(false);
       setSelectedBin(null);
       setSearchValue("");
+      setErrorMessage(null);
+    } else if (fetcher.data?.field === "bin" && fetcher.data?.error) {
+      setErrorMessage(fetcher.data.error);
+      // Auto-hide after 6 seconds
+      setTimeout(() => setErrorMessage(null), 6000);
     }
   }, [fetcher.data]);
 
@@ -1315,11 +1503,12 @@ function BinEditor({ productId, initialBin, binLocations = [] }) {
   // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
+    const panelId = `bin-editor-panel-${productId.replace(/[^a-zA-Z0-9]/g, '')}`;
     const handler = (e) => {
       // If click is on the button itself, ignore (openPicker handles toggle)
       if (buttonRef.current?.contains(e.target)) return;
       // If click is inside the portal panel, ignore
-      const panel = document.getElementById("bin-editor-portal-panel");
+      const panel = document.getElementById(panelId);
       if (panel?.contains(e.target)) return;
       closePicker();
     };
@@ -1387,7 +1576,7 @@ function BinEditor({ productId, initialBin, binLocations = [] }) {
 
   const panel = isOpen && portalRoot ? createPortal(
     <div
-      id="bin-editor-portal-panel"
+      id={`bin-editor-panel-${productId.replace(/[^a-zA-Z0-9]/g, '')}`}
       style={{
         position: "absolute",
         top: panelPos.top,
@@ -1427,19 +1616,41 @@ function BinEditor({ productId, initialBin, binLocations = [] }) {
             </button>
           </div>
           <InlineStack gap="200">
-            <Button
-              variant="primary"
-              size="slim"
-              onClick={handleSave}
-              loading={isSaving}
+            <button
+              onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); handleSave(); }}
               disabled={isSaving}
-              fullWidth
+              style={{
+                flex: 1,
+                padding: "8px 14px",
+                borderRadius: "var(--p-border-radius-200)",
+                border: "none",
+                background: isSaving ? "#D8BFA4" : "#C9A273",
+                color: "#fff",
+                fontWeight: "600",
+                fontSize: "13px",
+                cursor: isSaving ? "wait" : "pointer",
+                opacity: isSaving ? 0.7 : 1,
+                transition: "all 0.2s",
+              }}
             >
-              Save Location
-            </Button>
-            <Button size="slim" variant="tertiary" onClick={closePicker} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Location"}
+            </button>
+            <button
+              onMouseDown={(e) => { e.stopPropagation(); closePicker(); }}
+              disabled={isSaving}
+              style={{
+                padding: "8px 14px",
+                borderRadius: "var(--p-border-radius-200)",
+                border: "1px solid #D8BFA4",
+                background: "none",
+                color: "#945528",
+                fontWeight: "500",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
               Cancel
-            </Button>
+            </button>
           </InlineStack>
         </BlockStack>
       ) : (
@@ -1525,24 +1736,110 @@ function BinEditor({ productId, initialBin, binLocations = [] }) {
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        onMouseDown={openPicker}
-        style={{
-          padding: "5px 12px",
-          borderRadius: "var(--p-border-radius-200)",
-          border: bin ? "1px solid #D8BFA4" : "1px solid #C9A273",
-          background: bin ? "#FAF7F3" : "#FAEBE1",
-          cursor: "pointer",
-          fontSize: "13px",
-          fontWeight: bin ? "500" : "600",
-          color: bin ? "var(--p-color-text)" : "#7a4800",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {bin ? `📍 ${bin}` : "+ Assign Bin"}
-      </button>
+      <div style={{ position: "relative", display: "inline-block" }}>
+        <button
+          ref={buttonRef}
+          onMouseDown={openPicker}
+          style={{
+            padding: "5px 12px",
+            borderRadius: "var(--p-border-radius-200)",
+            border: bin ? "1px solid #D8BFA4" : "1px solid #C9A273",
+            background: bin ? "#FAF7F3" : "#FAEBE1",
+            cursor: "pointer",
+            fontSize: "13px",
+            fontWeight: bin ? "500" : "600",
+            color: bin ? "var(--p-color-text)" : "#7a4800",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {bin ? `📍 ${bin}` : "+ Assign Bin"}
+        </button>
+        {errorMessage && (
+          <div style={{
+            position: "absolute",
+            top: "100%",
+            left: "0",
+            marginTop: "4px",
+            padding: "8px 12px",
+            background: "#FFF4E5",
+            border: "1px solid #FFA500",
+            borderRadius: "var(--p-border-radius-200)",
+            fontSize: "12px",
+            color: "#8B4513",
+            whiteSpace: "normal",
+            maxWidth: "300px",
+            zIndex: 10000,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          }}>
+            ⚠️ {errorMessage}
+          </div>
+        )}
+      </div>
       {panel}
     </>
+  );
+}
+
+
+/**
+ * HELPER: SetupMetafieldModal
+ * Creates the bin_locations metafield definition in the store so bin
+ * assignments can be saved. Only needed once per store.
+ */
+function SetupMetafieldModal({ active, onClose, fetcher }) {
+  const handleSetup = () => {
+    fetcher.load("/app/setup-bin-metafield");
+  };
+
+  const isLoading = fetcher.state === "loading";
+
+  return (
+    <Modal
+      open={active}
+      onClose={onClose}
+      title="Setup Bin Location Metafield"
+      primaryAction={{
+        content: "Create Metafield",
+        onAction: handleSetup,
+        loading: isLoading,
+      }}
+      secondaryActions={[{ content: "Cancel", onAction: onClose }]}
+    >
+      <Modal.Section>
+        <BlockStack gap="400">
+          <Text variant="bodyMd">
+            This will create the <strong>Bin Locations</strong> metafield definition in your store so bin assignments can be saved to products.
+          </Text>
+
+          <div style={{
+            background: "#F1ECE5",
+            border: "1px solid #C9A273",
+            borderRadius: "var(--p-border-radius-200)",
+            padding: "12px 16px",
+          }}>
+            <BlockStack gap="200">
+              <Text variant="headingXs" fontWeight="semibold">Metafield Details</Text>
+              <Text variant="bodySm" tone="subdued">
+                <strong>Namespace:</strong> custom<br />
+                <strong>Key:</strong> bin_locations<br />
+                <strong>Type:</strong> Single line text<br />
+                <strong>Owner:</strong> Product
+              </Text>
+            </BlockStack>
+          </div>
+
+          <Text variant="bodySm" tone="subdued">
+            If the metafield already exists in your store, this operation will do nothing — it is safe to run multiple times.
+          </Text>
+
+          <Banner tone="info">
+            <p>
+              <strong>When do I need this?</strong><br />
+              If bin assignments aren't saving, it's likely because the metafield definition doesn't exist in your store yet. Run this setup once to fix it.
+            </p>
+          </Banner>
+        </BlockStack>
+      </Modal.Section>
+    </Modal>
   );
 }

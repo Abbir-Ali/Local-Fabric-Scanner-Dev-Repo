@@ -332,7 +332,7 @@
                     console.log(`[HISTORY] Using cached data (${historyData.length} items, page ${histPage})`);
                     document.getElementById('history-container').innerHTML = historyData
                         .map((e, idx) => {
-                            const hIdx = (histPage - 1) * 10 + idx + 1;
+                            const hIdx = (histPage - 1) * 5 + idx + 1;
                             const fulfiller = e.log ? e.log.scannedBy || e.log.staffEmail : 'Unknown';
                             const orderId = e.node.id.split('/').pop();
                             const hsa = e.node.shippingAddress || {};
@@ -386,6 +386,28 @@
             invStart = null;
             invEnd = null;
             loadInventory();
+        }, 500);
+    };
+
+    let orderSearchTimeout;
+    document.getElementById('order-search-input').oninput = (e) => {
+        clearTimeout(orderSearchTimeout);
+        orderSearchTimeout = setTimeout(() => {
+            ordPage = 1;
+            ordStart = null;
+            ordEnd = null;
+            loadOrders();
+        }, 500);
+    };
+
+    let historySearchTimeout;
+    document.getElementById('history-search-input').oninput = (e) => {
+        clearTimeout(historySearchTimeout);
+        historySearchTimeout = setTimeout(() => {
+            histPage = 1;
+            histStart = null;
+            histEnd = null;
+            loadHistory();
         }, 500);
     };
 
@@ -466,7 +488,7 @@
                 const p = e.node,
                     v = p.variants.edges[0].node;
                 const bin = getBin(p);
-                const displayNumber = (invPage - 1) * 10 + idx + 1;
+                const displayNumber = (invPage - 1) * 5 + idx + 1;
                 return `<div class="fb-stock-card">
                     <div class="fb-stock-body">
                         <img src="${p.featuredImage?.url || ''}" class="fb-stock-img">
@@ -489,13 +511,14 @@
     }
 
     const loadOrders = async (dir = 'next', isPagination = false) => {
-        console.log(`[ORDERS FETCH] Direction: ${dir}, isPagination: ${isPagination}, Current page: ${ordPage}`);
+        const searchQuery = document.getElementById('order-search-input').value || '';
+        console.log(`[ORDERS FETCH] Direction: ${dir}, isPagination: ${isPagination}, Current page: ${ordPage}, Search: ${searchQuery}`);
         setLoader(true);
         let cur = dir === 'next' ? ordEnd : ordStart;
         if (!cur) dir = 'next';
         try {
             const r = await fetch(
-                `${PROXY_URL}?type=orders&direction=${dir}${cur ? `&cursor=${cur}` : ''}&_t=${Date.now()}`
+                `${PROXY_URL}?type=orders&direction=${dir}${cur ? `&cursor=${cur}` : ''}&search=${encodeURIComponent(searchQuery)}&_t=${Date.now()}`
             );
             const j = await r.json();
             ordersData = j.data.edges;
@@ -532,11 +555,13 @@
     document.getElementById('next-orders').onclick = () => loadOrders('next', true);
 
     function renderOrders() {
+        const searchQuery = document.getElementById('order-search-input').value || '';
         console.log(`[ORDERS RENDER] Rendering ${ordersData.length} items for page ${ordPage}`);
         const container = document.getElementById('order-container');
         if (ordersData.length === 0) {
-            container.innerHTML =
-                '<div style="text-align:center; padding:40px; color:var(--p-text-subdued)">No pending swatch orders found.</div>';
+            container.innerHTML = searchQuery
+                ? '<div style="text-align:center; padding:40px; color:var(--p-text-subdued)">No orders found matching your search.</div>'
+                : '<div style="text-align:center; padding:40px; color:var(--p-text-subdued)">No pending swatch orders found.</div>';
             return;
         }
         container.innerHTML = ordersData
@@ -569,7 +594,7 @@
 
                 if (fabrics.length === 0) return '';
                 const allVerified = fabrics.every((x) => verifiedItems.has(x.node.id));
-                const orderRowIdx = (ordPage - 1) * 10 + idx + 1;
+                const orderRowIdx = (ordPage - 1) * 5 + idx + 1;
 
                 // Check if order is partially fulfilled
                 const isPartiallyFulfilled = fulfilledSwatchQty > 0 && fulfilledSwatchQty < totalSwatchQty;
@@ -726,15 +751,15 @@
         var html = `<html><head><title>Label - ${name}</title>
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
-                    html, body { 
-                        font-family: Arial, sans-serif; 
+                    html, body {
+                        font-family: Arial, sans-serif;
                         width: 100%;
                         height: 100%;
                         overflow: hidden;
                         background: white;
                     }
                     @media print {
-                        @page { 
+                        @page {
                             margin: 0;
                         }
                         html, body {
@@ -744,49 +769,49 @@
                             padding: 0;
                         }
                     }
-                    .label-container { 
-                        display: flex; 
-                        align-items: center; 
-                        justify-content: space-between; 
-                        gap: 0.08in; 
+                    .label-container {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        gap: 0.08in;
                         width: 100%;
                         height: 100%;
                         padding: 0.05in;
                         page-break-after: avoid;
                         page-break-inside: avoid;
                     }
-                    .logo-box { 
-                        width: 0.7in; 
-                        height: 0.7in; 
-                        display: flex; 
-                        align-items: center; 
-                        justify-content: center; 
+                    .logo-box {
+                        width: 0.7in;
+                        height: 0.7in;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
                         flex-shrink: 0;
                         background: white;
                     }
-                    .logo-box img { 
-                        max-width: 0.65in; 
-                        max-height: 0.65in; 
-                        object-fit: contain; 
+                    .logo-box img {
+                        max-width: 0.65in;
+                        max-height: 0.65in;
+                        object-fit: contain;
                     }
-                    .address-box { 
-                        flex: 1; 
+                    .address-box {
+                        flex: 1;
                         min-width: 0;
                         display: flex;
                         flex-direction: column;
                         justify-content: center;
                         gap: 0.02in;
                     }
-                    .customer-name { 
-                        font-weight: bold; 
-                        font-size: 9pt; 
+                    .customer-name {
+                        font-weight: bold;
+                        font-size: 9pt;
                         line-height: 1.1;
-                        white-space: nowrap; 
-                        overflow: hidden; 
+                        white-space: nowrap;
+                        overflow: hidden;
                         text-overflow: ellipsis;
                     }
-                    .address-line { 
-                        font-size: 7pt; 
+                    .address-line {
+                        font-size: 7pt;
                         line-height: 1.2;
                         word-wrap: break-word;
                         overflow: hidden;
@@ -808,10 +833,10 @@
                 </div>
                 ${s}>
                     window.onload = function() {
-                        setTimeout(function() { 
-                            window.print(); 
+                        setTimeout(function() {
+                            window.print();
                             window.close();
-                        }, 250); 
+                        }, 250);
                     };
                 ${se}
             </body></html>`;
@@ -831,13 +856,14 @@
     };
 
     const loadHistory = async (dir = 'next', isPagination = false) => {
-        console.log(`[HISTORY FETCH]Direction: ${dir}, isPagination: ${isPagination}, Current page: ${histPage} `);
+        const searchQuery = document.getElementById('history-search-input').value || '';
+        console.log(`[HISTORY FETCH] Direction: ${dir}, isPagination: ${isPagination}, Current page: ${histPage}, Search: ${searchQuery}`);
         setLoader(true);
         let cur = dir === 'next' ? histEnd : histStart;
         if (!cur) dir = 'next';
         try {
             const r = await fetch(
-                `${PROXY_URL}?type=fulfilled&direction=${dir}${cur ? `&cursor=${cur}` : ''}&_t=${Date.now()}`
+                `${PROXY_URL}?type=fulfilled&direction=${dir}${cur ? `&cursor=${cur}` : ''}&search=${encodeURIComponent(searchQuery)}&_t=${Date.now()}`
             );
             const j = await r.json();
             historyData = j.data.edges;
@@ -847,7 +873,7 @@
             if (isPagination && cur) {
                 if (dir === 'next') histPage++;
                 else if (histPage > 1) histPage--;
-                console.log(`[HISTORY FETCH] Page updated to: ${histPage} `);
+                console.log(`[HISTORY FETCH] Page updated to: ${histPage}`);
             }
             histHasNext = pi.hasNextPage;
             histHasPrev = pi.hasPreviousPage;
@@ -855,18 +881,19 @@
             histEnd = pi.endCursor;
             document.getElementById('prev-history').disabled = !histHasPrev;
             document.getElementById('next-history').disabled = !histHasNext;
-            document.getElementById('page-label-history').innerText = `Page ${histPage} `;
+            document.getElementById('page-label-history').innerText = `Page ${histPage}`;
             document.getElementById('history-pagination').style.display = histHasNext || histHasPrev ? 'flex' : 'none';
 
             console.log(`[HISTORY RENDER] Rendering ${historyData.length} items for page ${histPage}`);
             const historyContainer = document.getElementById('history-container');
             if (historyData.length === 0) {
-                historyContainer.innerHTML =
-                    '<div style="text-align:center; padding:40px; color:var(--p-text-subdued)">No fulfillment history found.</div>';
+                historyContainer.innerHTML = searchQuery
+                    ? '<div style="text-align:center; padding:40px; color:var(--p-text-subdued)">No orders found matching your search.</div>'
+                    : '<div style="text-align:center; padding:40px; color:var(--p-text-subdued)">No fulfillment history found.</div>';
             } else {
                 historyContainer.innerHTML = historyData
                     .map((e, idx) => {
-                        const hIdx = (histPage - 1) * 10 + idx + 1;
+                        const hIdx = (histPage - 1) * 5 + idx + 1;
                         const fulfiller = e.log ? e.log.scannedBy || e.log.staffEmail : 'Unknown';
                         const orderId = e.node.id.split('/').pop();
                         const hsa = e.node.shippingAddress || {};

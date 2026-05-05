@@ -1,11 +1,11 @@
-import { useLoaderData, useNavigate, useSearchParams, useRevalidator } from "@remix-run/react";
+import { useLoaderData, useNavigate, useSearchParams, useRevalidator, useNavigation } from "@remix-run/react";
 import { useEffect } from "react";
 import { authenticate } from "../shopify.server";
 import { getFabricOrders, getFulfilledFabricOrders, getPartiallyFulfilledOrders, getFulfilledOrdersCount, getPendingOrdersCount, getPartialOrdersCount } from "../services/order.server";
 import BarcodeImage from "../components/BarcodeImage";
 
 // Components
-import { Page, Layout, Card, BlockStack, Text, InlineGrid, Collapsible, Button, Badge, InlineStack, Thumbnail, Pagination, Icon } from "@shopify/polaris";
+import { Page, Layout, Card, BlockStack, Text, InlineGrid, Collapsible, Button, Badge, InlineStack, Thumbnail, Pagination, Icon, TextField, Select } from "@shopify/polaris";
 import { ChevronDownIcon, ChevronUpIcon, PersonIcon, ViewIcon } from "@shopify/polaris-icons";
 import { useState } from "react";
 
@@ -25,15 +25,23 @@ export const loader = async ({ request }) => {
 
   const pendingCursor = url.searchParams.get("pendingCursor");
   const pendingDir = url.searchParams.get("pendingDir") || "next";
+  const pendingSearch = url.searchParams.get("pendingSearch") || "";
+  const pendingLimit = parseInt(url.searchParams.get("pendingLimit") || "5");
+
   const partialCursor = url.searchParams.get("partialCursor");
   const partialDir = url.searchParams.get("partialDir") || "next";
+  const partialSearch = url.searchParams.get("partialSearch") || "";
+  const partialLimit = parseInt(url.searchParams.get("partialLimit") || "5");
+
   const fulfilledCursor = url.searchParams.get("fulfilledCursor");
   const fulfilledDir = url.searchParams.get("fulfilledDir") || "next";
+  const fulfilledSearch = url.searchParams.get("fulfilledSearch") || "";
+  const fulfilledLimit = parseInt(url.searchParams.get("fulfilledLimit") || "5");
 
   const [pendingData, partialData, fulfilledData, stats, liveFulfilledCount, livePendingCount, livePartialCount, settings] = await Promise.all([
-    getFabricOrders(admin, pendingCursor, pendingDir),
-    getPartiallyFulfilledOrders(admin, partialCursor, partialDir),
-    getFulfilledFabricOrders(admin, fulfilledCursor, fulfilledDir),
+    getFabricOrders(admin, pendingCursor, pendingDir, pendingSearch, pendingLimit),
+    getPartiallyFulfilledOrders(admin, partialCursor, partialDir, partialSearch, partialLimit),
+    getFulfilledFabricOrders(admin, fulfilledCursor, fulfilledDir, fulfilledSearch, fulfilledLimit),
     getDashboardStats(session.shop),
     getFulfilledOrdersCount(admin),
     getPendingOrdersCount(admin),
@@ -54,10 +62,16 @@ export const loader = async ({ request }) => {
   return {
     swatchOrders: pendingData.edges,
     pendingPageInfo: pendingData.pageInfo,
+    pendingSearch,
+    pendingLimit,
     partialOrders: partialWithLogs,
     partialPageInfo: partialData.pageInfo,
+    partialSearch,
+    partialLimit,
     fulfilledOrders: fulfilledWithLogs,
     fulfilledPageInfo: fulfilledData.pageInfo,
+    fulfilledSearch,
+    fulfilledLimit,
     stats: {
       ...stats,
       totalFulfilled: liveFulfilledCount,
@@ -70,10 +84,39 @@ export const loader = async ({ request }) => {
 };
 
 export default function Index() {
-  const { swatchOrders, partialOrders, fulfilledOrders, stats, pendingPageInfo, partialPageInfo, fulfilledPageInfo, settings, shopDomain } = useLoaderData();
+  const { swatchOrders, partialOrders, fulfilledOrders, stats, pendingPageInfo, partialPageInfo, fulfilledPageInfo, settings, shopDomain, pendingSearch: initialPendingSearch = "", partialSearch: initialPartialSearch = "", fulfilledSearch: initialFulfilledSearch = "", pendingLimit: initialPendingLimit = 5, partialLimit: initialPartialLimit = 5, fulfilledLimit: initialFulfilledLimit = 5 } = useLoaderData();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
+  const navigation = useNavigation();
+
+  // Loading states
+  const isLoading = navigation.state === "loading";
+
+  // Debug logging
+  console.log('[DASHBOARD] Loaded data:', {
+    swatchOrdersCount: swatchOrders?.length || 0,
+    partialOrdersCount: partialOrders?.length || 0,
+    fulfilledOrdersCount: fulfilledOrders?.length || 0,
+    stats
+  });
+
+  // Search state for each tab
+  const [pendingSearchValue, setPendingSearchValue] = useState(initialPendingSearch);
+  const [partialSearchValue, setPartialSearchValue] = useState(initialPartialSearch);
+  const [fulfilledSearchValue, setFulfilledSearchValue] = useState(initialFulfilledSearch);
+
+  // Page size state for each tab
+  const [pendingPageSize, setPendingPageSize] = useState(String(initialPendingLimit));
+  const [partialPageSize, setPartialPageSize] = useState(String(initialPartialLimit));
+  const [fulfilledPageSize, setFulfilledPageSize] = useState(String(initialFulfilledLimit));
+
+  const pageSizeOptions = [
+    { label: '5 per page', value: '5' },
+    { label: '10 per page', value: '10' },
+    { label: '25 per page', value: '25' },
+    { label: '50 per page', value: '50' },
+  ];
 
   // Auto-refresh the dashboard every 5 seconds to keep it sync with scanner activity
   useEffect(() => {
@@ -86,6 +129,86 @@ export default function Index() {
 
     return () => clearInterval(interval);
   }, [revalidator]);
+
+  // Search handlers with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (pendingSearchValue !== initialPendingSearch) {
+        const params = new URLSearchParams(searchParams);
+        if (pendingSearchValue) {
+          params.set("pendingSearch", pendingSearchValue);
+        } else {
+          params.delete("pendingSearch");
+        }
+        params.delete("pendingCursor");
+        params.delete("pendingPage");
+        navigate(`?${params.toString()}`, { replace: true });
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [pendingSearchValue, initialPendingSearch, searchParams, navigate]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (partialSearchValue !== initialPartialSearch) {
+        const params = new URLSearchParams(searchParams);
+        if (partialSearchValue) {
+          params.set("partialSearch", partialSearchValue);
+        } else {
+          params.delete("partialSearch");
+        }
+        params.delete("partialCursor");
+        params.delete("partialPage");
+        navigate(`?${params.toString()}`, { replace: true });
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [partialSearchValue, initialPartialSearch, searchParams, navigate]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (fulfilledSearchValue !== initialFulfilledSearch) {
+        const params = new URLSearchParams(searchParams);
+        if (fulfilledSearchValue) {
+          params.set("fulfilledSearch", fulfilledSearchValue);
+        } else {
+          params.delete("fulfilledSearch");
+        }
+        params.delete("fulfilledCursor");
+        params.delete("fulfilledPage");
+        navigate(`?${params.toString()}`, { replace: true });
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [fulfilledSearchValue, initialFulfilledSearch, searchParams, navigate]);
+
+  // Page size change handlers
+  const handlePendingPageSizeChange = (value) => {
+    setPendingPageSize(value);
+    const params = new URLSearchParams(searchParams);
+    params.set("pendingLimit", value);
+    params.delete("pendingCursor");
+    params.delete("pendingPage");
+    navigate(`?${params.toString()}`);
+  };
+
+  const handlePartialPageSizeChange = (value) => {
+    setPartialPageSize(value);
+    const params = new URLSearchParams(searchParams);
+    params.set("partialLimit", value);
+    params.delete("partialCursor");
+    params.delete("partialPage");
+    navigate(`?${params.toString()}`);
+  };
+
+  const handleFulfilledPageSizeChange = (value) => {
+    setFulfilledPageSize(value);
+    const params = new URLSearchParams(searchParams);
+    params.set("fulfilledLimit", value);
+    params.delete("fulfilledCursor");
+    params.delete("fulfilledPage");
+    navigate(`?${params.toString()}`);
+  };
 
   const handlePendingNext = () => {
     if (pendingPageInfo?.hasNextPage) {
@@ -173,6 +296,12 @@ export default function Index() {
 
   return (
     <Page title="Dashboard">
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       <Layout>
         <Layout.Section>
           <InlineGrid columns={4} gap="400">
@@ -210,23 +339,82 @@ export default function Index() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">Pending Swatch Orders</Text>
-              {swatchOrders.length === 0 ? (
-                <Text tone="subdued">No pending orders.</Text>
-              ) : (
-                <BlockStack gap="400">
-                  {swatchOrders.map(({ node: order }, idx) => (
-                    <OrderRow key={order.id} order={order} status="pending" index={(parseInt(searchParams.get("pendingPage") || "1") - 1) * 5 + idx + 1} shopDomain={shopDomain} />
-                  ))}
-                  <Pagination
-                    hasPrevious={pendingPageInfo?.hasPreviousPage}
-                    onPrevious={handlePendingPrev}
-                    hasNext={pendingPageInfo?.hasNextPage}
-                    onNext={handlePendingNext}
-                    accessibilityLabel="Pending orders pagination"
-                  />
-                </BlockStack>
-              )}
+              <InlineStack align="space-between" blockAlign="center" wrap={false}>
+                <Text variant="headingMd" as="h2">Pending Swatch Orders</Text>
+                <InlineStack gap="200" wrap={false}>
+                  <div style={{ width: '140px' }}>
+                    <Select
+                      label=""
+                      labelHidden
+                      options={pageSizeOptions}
+                      value={pendingPageSize}
+                      onChange={handlePendingPageSizeChange}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div style={{ width: '300px' }}>
+                    <TextField
+                      placeholder="Search by order #, name, email..."
+                      value={pendingSearchValue}
+                      onChange={setPendingSearchValue}
+                      clearButton
+                      onClearButtonClick={() => setPendingSearchValue("")}
+                      autoComplete="off"
+                      disabled={isLoading}
+                    />
+                  </div>
+                </InlineStack>
+              </InlineStack>
+              <div style={{ position: 'relative', minHeight: '200px' }}>
+                {isLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    backdropFilter: 'blur(3px)',
+                    zIndex: 100,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    borderRadius: 'var(--p-border-radius-200)',
+                    pointerEvents: 'all',
+                    cursor: 'wait',
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      border: '4px solid #E3E3E3',
+                      borderTop: '4px solid #C9A273',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                    }} />
+                    <Text variant="bodyMd" tone="subdued" fontWeight="semibold">
+                      {pendingSearchValue ? 'Searching...' : 'Loading orders...'}
+                    </Text>
+                  </div>
+                )}
+                {swatchOrders.length === 0 ? (
+                  <Text tone="subdued">{pendingSearchValue ? "No orders found matching your search." : "No pending orders."}</Text>
+                ) : (
+                  <BlockStack gap="400">
+                    {swatchOrders.map(({ node: order }, idx) => (
+                      <OrderRow key={order.id} order={order} status="pending" index={(parseInt(searchParams.get("pendingPage") || "1") - 1) * parseInt(pendingPageSize) + idx + 1} shopDomain={shopDomain} />
+                    ))}
+                    <Pagination
+                      hasPrevious={pendingPageInfo?.hasPreviousPage && !isLoading}
+                      onPrevious={handlePendingPrev}
+                      hasNext={pendingPageInfo?.hasNextPage && !isLoading}
+                      onNext={handlePendingNext}
+                      accessibilityLabel="Pending orders pagination"
+                    />
+                  </BlockStack>
+                )}
+              </div>
             </BlockStack>
           </Card>
         </Layout.Section>
@@ -234,29 +422,88 @@ export default function Index() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">Partially Fulfilled Orders</Text>
-              {partialOrders.length === 0 ? (
-                <Text tone="subdued">No partially fulfilled orders.</Text>
-              ) : (
-                <BlockStack gap="400">
-                  {partialOrders.map(({ node: order, logs }, idx) => (
-                    <PartialOrderRow
-                      key={order.id}
-                      order={order}
-                      logs={logs}
-                      index={(parseInt(searchParams.get("partialPage") || "1") - 1) * 5 + idx + 1}
-                      shopDomain={shopDomain}
+              <InlineStack align="space-between" blockAlign="center" wrap={false}>
+                <Text variant="headingMd" as="h2">Partially Fulfilled Orders</Text>
+                <InlineStack gap="200" wrap={false}>
+                  <div style={{ width: '140px' }}>
+                    <Select
+                      label=""
+                      labelHidden
+                      options={pageSizeOptions}
+                      value={partialPageSize}
+                      onChange={handlePartialPageSizeChange}
+                      disabled={isLoading}
                     />
-                  ))}
-                  <Pagination
-                    hasPrevious={partialPageInfo?.hasPreviousPage}
-                    onPrevious={handlePartialPrev}
-                    hasNext={partialPageInfo?.hasNextPage}
-                    onNext={handlePartialNext}
-                    accessibilityLabel="Partial orders pagination"
-                  />
-                </BlockStack>
-              )}
+                  </div>
+                  <div style={{ width: '300px' }}>
+                    <TextField
+                      placeholder="Search by order #, name, email..."
+                      value={partialSearchValue}
+                      onChange={setPartialSearchValue}
+                      clearButton
+                      onClearButtonClick={() => setPartialSearchValue("")}
+                      autoComplete="off"
+                      disabled={isLoading}
+                    />
+                  </div>
+                </InlineStack>
+              </InlineStack>
+              <div style={{ position: 'relative', minHeight: '200px' }}>
+                {isLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    backdropFilter: 'blur(3px)',
+                    zIndex: 100,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    borderRadius: 'var(--p-border-radius-200)',
+                    pointerEvents: 'all',
+                    cursor: 'wait',
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      border: '4px solid #E3E3E3',
+                      borderTop: '4px solid #C9A273',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                    }} />
+                    <Text variant="bodyMd" tone="subdued" fontWeight="semibold">
+                      {partialSearchValue ? 'Searching...' : 'Loading orders...'}
+                    </Text>
+                  </div>
+                )}
+                {partialOrders.length === 0 ? (
+                  <Text tone="subdued">{partialSearchValue ? "No orders found matching your search." : "No partially fulfilled orders."}</Text>
+                ) : (
+                  <BlockStack gap="400">
+                    {partialOrders.map(({ node: order, logs }, idx) => (
+                      <PartialOrderRow
+                        key={order.id}
+                        order={order}
+                        logs={logs}
+                        index={(parseInt(searchParams.get("partialPage") || "1") - 1) * parseInt(partialPageSize) + idx + 1}
+                        shopDomain={shopDomain}
+                      />
+                    ))}
+                    <Pagination
+                      hasPrevious={partialPageInfo?.hasPreviousPage && !isLoading}
+                      onPrevious={handlePartialPrev}
+                      hasNext={partialPageInfo?.hasNextPage && !isLoading}
+                      onNext={handlePartialNext}
+                      accessibilityLabel="Partial orders pagination"
+                    />
+                  </BlockStack>
+                )}
+              </div>
             </BlockStack>
           </Card>
         </Layout.Section>
@@ -264,30 +511,89 @@ export default function Index() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">Fulfilled History</Text>
-              {fulfilledOrders.length === 0 ? (
-                <Text tone="subdued">No fulfilled orders found.</Text>
-              ) : (
-                <BlockStack gap="400">
-                  {fulfilledOrders.map((edge, idx) => (
-                    <OrderRow
-                      key={edge.node.id}
-                      order={edge.node}
-                      status="fulfilled"
-                      logs={edge.logs}
-                      index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * 5 + idx + 1}
-                      shopDomain={shopDomain}
+              <InlineStack align="space-between" blockAlign="center" wrap={false}>
+                <Text variant="headingMd" as="h2">Fulfilled History</Text>
+                <InlineStack gap="200" wrap={false}>
+                  <div style={{ width: '140px' }}>
+                    <Select
+                      label=""
+                      labelHidden
+                      options={pageSizeOptions}
+                      value={fulfilledPageSize}
+                      onChange={handleFulfilledPageSizeChange}
+                      disabled={isLoading}
                     />
-                  ))}
-                  <Pagination
-                    hasPrevious={fulfilledPageInfo?.hasPreviousPage}
-                    onPrevious={handleFulfilledPrev}
-                    hasNext={fulfilledPageInfo?.hasNextPage}
-                    onNext={handleFulfilledNext}
-                    accessibilityLabel="Fulfilled orders pagination"
-                  />
-                </BlockStack>
-              )}
+                  </div>
+                  <div style={{ width: '300px' }}>
+                    <TextField
+                      placeholder="Search by order #, name, email..."
+                      value={fulfilledSearchValue}
+                      onChange={setFulfilledSearchValue}
+                      clearButton
+                      onClearButtonClick={() => setFulfilledSearchValue("")}
+                      autoComplete="off"
+                      disabled={isLoading}
+                    />
+                  </div>
+                </InlineStack>
+              </InlineStack>
+              <div style={{ position: 'relative', minHeight: '200px' }}>
+                {isLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    backdropFilter: 'blur(3px)',
+                    zIndex: 100,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    borderRadius: 'var(--p-border-radius-200)',
+                    pointerEvents: 'all',
+                    cursor: 'wait',
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      border: '4px solid #E3E3E3',
+                      borderTop: '4px solid #C9A273',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                    }} />
+                    <Text variant="bodyMd" tone="subdued" fontWeight="semibold">
+                      {fulfilledSearchValue ? 'Searching...' : 'Loading orders...'}
+                    </Text>
+                  </div>
+                )}
+                {fulfilledOrders.length === 0 ? (
+                  <Text tone="subdued">{fulfilledSearchValue ? "No orders found matching your search." : "No fulfilled orders found."}</Text>
+                ) : (
+                  <BlockStack gap="400">
+                    {fulfilledOrders.map((edge, idx) => (
+                      <OrderRow
+                        key={edge.node.id}
+                        order={edge.node}
+                        status="fulfilled"
+                        logs={edge.logs}
+                        index={(parseInt(searchParams.get("fulfilledPage") || "1") - 1) * parseInt(fulfilledPageSize) + idx + 1}
+                        shopDomain={shopDomain}
+                      />
+                    ))}
+                    <Pagination
+                      hasPrevious={fulfilledPageInfo?.hasPreviousPage && !isLoading}
+                      onPrevious={handleFulfilledPrev}
+                      hasNext={fulfilledPageInfo?.hasNextPage && !isLoading}
+                      onNext={handleFulfilledNext}
+                      accessibilityLabel="Fulfilled orders pagination"
+                    />
+                  </BlockStack>
+                )}
+              </div>
             </BlockStack>
           </Card>
         </Layout.Section>
